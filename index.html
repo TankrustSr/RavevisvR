@@ -32,7 +32,7 @@
       border: 1px solid rgba(255, 255, 255, 0.16);
       pointer-events: none;
       z-index: 10;
-      max-width: 340px;
+      max-width: 350px;
       font-size: 13px;
       line-height: 1.5;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
@@ -102,10 +102,10 @@
     Left Hand: <span id="left-val" class="val">Resting</span><br>
     Right Hand: <span id="right-val" class="val">Resting</span>
     <div class="hud-controls">
-      • <b>Left Hand Pinch:</b> Toggle World-Locked Floating Palette Menu.<br>
-      • <b>Right Hand:</b> Point laser at menu buttons; magnetic lock guarantees clicks.<br>
-      • <b>Right Open Pinch:</b> High-intensity luminous shockwave.<br>
-      • <b>3-Tier Antialiasing:</b> 4x Hardware MSAA + 1.25x SuperSampling.
+      • <b>Left Hand Hold Pinch (1.2s):</b> Charges glowing ring to toggle menu.<br>
+      • <b>Right Hand:</b> Palm-stabilized laser; pinch to trigger buttons.<br>
+      • <b>Right Open Pinch:</b> High-intensity shockwave in open space.<br>
+      • <b>Dynamic Hand Tracking:</b> Left/right identities are permanently locked.
     </div>
   </div>
 
@@ -518,7 +518,6 @@
 
     const clickableAreas = [];
 
-    // Robust round-rect implementation (Uses native roundRect or quadraticCurveTo; NEVER calls arcTo)
     function drawRoundedRect(ctx, x, y, w, h, r) {
       if (w < 2 * r) r = w / 2;
       if (h < 2 * r) r = h / 2;
@@ -570,7 +569,7 @@
 
         ctx.font = '500 16px -apple-system, sans-serif';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.fillText('Point right laser + pinch to select | Left pinch to dismiss', 48, 98);
+        ctx.fillText('Right laser + pinch to select | Hold left pinch (1.2s) to toggle', 48, 98);
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.beginPath();
@@ -749,32 +748,71 @@
       }
     }
 
-    // 4. VR Controllers & Laser Raycasting
-    const controller1 = renderer.xr.getController(0);
-    const controller2 = renderer.xr.getController(1);
-    scene.add(controller1);
-    scene.add(controller2);
+    // =========================================================================
+    // 4. VR CONTROLLER & HAND TRACKING SETUP (DYNAMIC HANDEDNESS ROUTING)
+    // =========================================================================
+    const rawControllers = [renderer.xr.getController(0), renderer.xr.getController(1)];
+    const rawHands = [
+      renderer.xr.getHand ? renderer.xr.getHand(0) : null,
+      renderer.xr.getHand ? renderer.xr.getHand(1) : null
+    ];
 
-    const pointerGeo = new THREE.SphereGeometry(0.015, 12, 12);
-    const orb1 = new THREE.Mesh(pointerGeo, new THREE.MeshBasicMaterial({ color: 0x00f0ff }));
-    const orb2 = new THREE.Mesh(pointerGeo, new THREE.MeshBasicMaterial({ color: 0xffa500 }));
-    controller1.add(orb1);
-    controller2.add(orb2);
+    rawControllers.forEach(c => scene.add(c));
+    rawHands.forEach(h => { if (h) scene.add(h); });
 
+    // Dynamic pointers strictly mapped by WebXR handedness
+    let leftController = null;
+    let rightController = null;
+    let leftHand = null;
+    let rightHand = null;
+
+    rawControllers.forEach((ctrl) => {
+      ctrl.addEventListener('connected', (e) => {
+        if (e.data.handedness === 'left') leftController = ctrl;
+        if (e.data.handedness === 'right') rightController = ctrl;
+      });
+      ctrl.addEventListener('disconnected', (e) => {
+        if (e.data.handedness === 'left') leftController = null;
+        if (e.data.handedness === 'right') rightController = null;
+      });
+    });
+
+    rawHands.forEach((h) => {
+      if (!h) return;
+      h.addEventListener('connected', (e) => {
+        if (e.data.handedness === 'left') leftHand = h;
+        if (e.data.handedness === 'right') rightHand = h;
+      });
+      h.addEventListener('disconnected', (e) => {
+        if (e.data.handedness === 'left') leftHand = null;
+        if (e.data.handedness === 'right') rightHand = null;
+      });
+    });
+
+    // 3D Holographic Charging Ring for Left Pinch Hold
+    const chargeRingGeo = new THREE.RingGeometry(0.016, 0.024, 32);
+    const chargeRingMat = new THREE.MeshBasicMaterial({
+      color: 0x00f0ff,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false
+    });
+    const leftChargeRing = new THREE.Mesh(chargeRingGeo, chargeRingMat);
+    leftChargeRing.visible = false;
+    scene.add(leftChargeRing);
+
+    // Laser Pointer Line (Right Hand Only)
     const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.85 });
     const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1.2)]);
     const laserLine = new THREE.Line(laserGeo, laserMat);
     scene.add(laserLine);
     laserLine.visible = false;
 
+    // Laser Reticle Dot on Menu Surface
     const dotMesh = new THREE.Mesh(new THREE.CircleGeometry(0.009, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, depthWrite: false }));
     dotMesh.visible = false;
     scene.add(dotMesh);
-
-    const hand1 = renderer.xr.getHand ? renderer.xr.getHand(0) : null;
-    const hand2 = renderer.xr.getHand ? renderer.xr.getHand(1) : null;
-    if (hand1) scene.add(hand1);
-    if (hand2) scene.add(hand2);
 
     // 5. 2D Fallback Drag Controls
     let isMouseDown = false;
@@ -895,7 +933,12 @@
     const smoothLeftVel = new THREE.Vector2();
     const smoothRightVel = new THREE.Vector2();
 
-    let leftPinchLatched = false;
+    // Timed Hold State for Left Pinch (1.2 Seconds Required)
+    const LEFT_HOLD_REQUIRED = 1.2;
+    let leftHoldTimer = 0.0;
+    let leftHoldCompleted = false;
+
+    // Right Pinch Latches
     let rightPinchLatched = false;
 
     const raycaster = new THREE.Raycaster();
@@ -936,48 +979,84 @@
       if (renderer.xr.isPresenting) {
         let rawLeftWorld = null;
         let rawRightWorld = null;
+        let leftPinchWorld = null;
         let leftPinch = 0.0;
         let rightPinch = 0.0;
 
-        if (hand1 && hand1.joints && hand1.joints['index-finger-tip']) {
-          rawLeftWorld = hand1.joints['index-finger-tip'].position;
-          const thmL = hand1.joints['thumb-tip'];
+        // Strict Left Hand Inspection
+        if (leftHand && leftHand.joints && leftHand.joints['index-finger-tip']) {
+          rawLeftWorld = leftHand.joints['index-finger-tip'].position;
+          const thmL = leftHand.joints['thumb-tip'];
           if (thmL) {
             const dist = rawLeftWorld.distanceTo(thmL.position);
             leftPinch = THREE.MathUtils.clamp(1.0 - (dist - 0.015) / 0.035, 0.0, 1.0);
+            leftPinchWorld = new THREE.Vector3().addVectors(rawLeftWorld, thmL.position).multiplyScalar(0.5);
           }
+        } else if (leftController) {
+          rawLeftWorld = leftController.position;
+          leftPinchWorld = leftController.position;
         }
-        if (hand2 && hand2.joints && hand2.joints['index-finger-tip']) {
-          rawRightWorld = hand2.joints['index-finger-tip'].position;
-          const thmR = hand2.joints['thumb-tip'];
+
+        // Strict Right Hand Inspection
+        if (rightHand && rightHand.joints && rightHand.joints['index-finger-tip']) {
+          rawRightWorld = rightHand.joints['index-finger-tip'].position;
+          const thmR = rightHand.joints['thumb-tip'];
           if (thmR) {
             const dist = rawRightWorld.distanceTo(thmR.position);
             rightPinch = THREE.MathUtils.clamp(1.0 - (dist - 0.015) / 0.035, 0.0, 1.0);
           }
+        } else if (rightController) {
+          rawRightWorld = rightController.position;
         }
 
+        // Read Controller Trigger Values
         const session = renderer.xr.getSession();
         if (session && session.inputSources) {
           session.inputSources.forEach((s) => {
-            if (s.handedness === 'left' && !rawLeftWorld) rawLeftWorld = controller1.position;
-            if (s.handedness === 'right' && !rawRightWorld) rawRightWorld = controller2.position;
-
-            if (s.gamepad && s.gamepad.buttons) {
-              const trigger = s.gamepad.buttons[0] ? s.gamepad.buttons[0].value : 0.0;
-              if (s.handedness === 'left') leftPinch = Math.max(leftPinch, trigger);
-              if (s.handedness === 'right') rightPinch = Math.max(rightPinch, trigger);
+            if (s.gamepad && s.gamepad.buttons && s.gamepad.buttons[0]) {
+              const triggerVal = s.gamepad.buttons[0].value;
+              if (s.handedness === 'left') leftPinch = Math.max(leftPinch, triggerVal);
+              if (s.handedness === 'right') rightPinch = Math.max(rightPinch, triggerVal);
             }
           });
         }
 
-        // --- GESTURE 1: LEFT PINCH TOGGLES FLOATING MENU ---
-        if (leftPinch > 0.78 && !leftPinchLatched) {
-          leftPinchLatched = true;
-          toggleMenu();
+        // =====================================================================
+        // GESTURE 1: LEFT PINCH TIMED HOLD (1.2 SECONDS TO TOGGLE MENU)
+        // =====================================================================
+        if (leftPinch > 0.70) {
+          if (!leftHoldCompleted) {
+            leftHoldTimer += dt;
+            const progress = THREE.MathUtils.clamp(leftHoldTimer / LEFT_HOLD_REQUIRED, 0.0, 1.0);
+
+            if (leftPinchWorld) {
+              leftChargeRing.position.copy(leftPinchWorld);
+              leftChargeRing.lookAt(camera.position);
+              leftChargeRing.scale.setScalar(0.3 + progress * 0.9);
+              chargeRingMat.color.setRGB(0.0, 0.9 + 0.1 * progress, 1.0);
+              chargeRingMat.opacity = 0.4 + 0.55 * progress;
+              leftChargeRing.visible = true;
+            }
+
+            const pct = Math.round(progress * 100);
+            leftVal.textContent = `Holding to ${menuMesh.visible ? 'Close' : 'Open'} (${pct}%)`;
+
+            if (leftHoldTimer >= LEFT_HOLD_REQUIRED) {
+              toggleMenu();
+              leftHoldCompleted = true;
+              leftChargeRing.visible = false;
+            }
+          } else {
+            leftChargeRing.visible = false;
+            leftVal.textContent = `Pinch Latched (${menuMesh.visible ? 'Menu Open' : 'Menu Closed'})`;
+          }
         } else if (leftPinch < 0.25) {
-          leftPinchLatched = false;
+          leftHoldTimer = 0.0;
+          leftHoldCompleted = false;
+          leftChargeRing.visible = false;
         }
 
+        // Left Hand Fluid Smoothing
         if (rawLeftWorld) {
           if (!leftInitialized) {
             smoothLeftPos.copy(rawLeftWorld);
@@ -1004,8 +1083,10 @@
             leftTrailArray[0].set(smoothLeftPolar.x, smoothLeftPolar.y, leftActivity, timestamp * 0.0075);
             leftVelsArray[0].copy(smoothLeftVel);
 
-            leftVal.textContent = leftPinch > 0.5 ? 'Pinching Menu Toggle' : 'Reaching (' + Math.round(leftActivity * 100) + '%)';
-          } else {
+            if (leftPinch <= 0.70) {
+              leftVal.textContent = 'Reaching (' + Math.round(leftActivity * 100) + '%)';
+            }
+          } else if (leftPinch <= 0.70) {
             leftVal.textContent = 'Resting by Side';
           }
         } else {
@@ -1013,18 +1094,21 @@
           leftVal.textContent = 'Idle';
         }
 
-        // --- GESTURE 2: RIGHT HAND INTERACTION (MENU LASER / LIGHT BURST) ---
+        // =====================================================================
+        // GESTURE 2: RIGHT HAND INTERACTION (PALM LASER & OPEN SPACE SHOCKWAVE)
+        // =====================================================================
         let isPointingAtMenu = false;
 
         if (menuMesh.visible && rawRightWorld) {
-          if (hand2 && hand2.joints && hand2.joints['wrist'] && hand2.joints['middle-finger-metacarpal']) {
-            const wristPos = hand2.joints['wrist'].position;
-            const palmKnuckle = hand2.joints['middle-finger-metacarpal'].position;
+          // Use palm/wrist vector for rock-solid stability during pinches
+          if (rightHand && rightHand.joints && rightHand.joints['wrist'] && rightHand.joints['middle-finger-metacarpal']) {
+            const wristPos = rightHand.joints['wrist'].position;
+            const palmKnuckle = rightHand.joints['middle-finger-metacarpal'].position;
             rayOrigin.copy(palmKnuckle);
             rayDir.subVectors(palmKnuckle, wristPos).normalize();
-          } else {
-            controller2.getWorldPosition(rayOrigin);
-            controller2.getWorldDirection(rayDir).negate();
+          } else if (rightController) {
+            rightController.getWorldPosition(rayOrigin);
+            rightController.getWorldDirection(rayDir).negate();
           }
 
           raycaster.set(rayOrigin, rayDir);
@@ -1059,6 +1143,7 @@
               }
             }
 
+            // Magnetic latch: Locks selection the moment right pinch starts (> 0.35)
             if (rightPinch > 0.35 && !lockedButtonId && hoveredButtonId) {
               lockedButtonId = hoveredButtonId;
             }
@@ -1067,6 +1152,7 @@
               renderMenuCanvas();
             }
 
+            // Execute selection when pinch completes (> 0.75)
             if (rightPinch > 0.75 && !rightPinchLatched) {
               rightPinchLatched = true;
               const target = lockedButtonId || hoveredButtonId;
@@ -1105,7 +1191,7 @@
           }
         }
 
-        // Right Hand Fluid Displacement & Shockwave
+        // Right Hand Fluid Displacement & Open-Space Shockwave
         if (rawRightWorld) {
           if (!rightInitialized) {
             smoothRightPos.copy(rawRightWorld);
@@ -1124,6 +1210,7 @@
 
           if (smoothRightVel.length() < 0.03) smoothRightVel.set(0, 0);
 
+          // Shockwave triggers only in open space away from menu
           if (rightPinch > 0.75 && !rightPinchLatched && !isPointingAtMenu) {
             rightPinchLatched = true;
             uniforms.u_right_burst.value = 1.6;
