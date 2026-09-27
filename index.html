@@ -113,7 +113,6 @@
   <div id="canvas-container"></div>
 
   <script>
-    // Visual Error Banner
     function showError(msg) {
       const banner = document.getElementById('err-banner');
       banner.style.display = 'block';
@@ -121,9 +120,8 @@
     }
     window.addEventListener('error', (e) => showError('Script Error: ' + e.message));
 
-    // HTTPS / Secure Context Check (Critical for WebXR)
     if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-      showError('WebXR requires HTTPS. Please access this application via GitHub Pages or a secure server.');
+      showError('WebXR requires HTTPS. Please access this page via GitHub Pages or a secure server.');
     }
 
     const modeVal = document.getElementById('mode-val');
@@ -153,7 +151,7 @@
     }
     container.appendChild(renderer.domElement);
 
-    // 2. Dome Geometry & Continuous Antialiased Fluid Shader
+    // 2. Geometry & Continuous Antialiased Fluid Shader
     const domeGeo = new THREE.SphereGeometry(60, 64, 32);
 
     const vertexShader = `
@@ -522,7 +520,6 @@
     menuMesh.visible = false;
     scene.add(menuMesh);
 
-    // Glowing Neon Glass Bezel
     const bezelGeo = new THREE.EdgesGeometry(menuGeo);
     const bezelMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.45 });
     menuMesh.add(new THREE.LineSegments(bezelGeo, bezelMat));
@@ -717,7 +714,6 @@
         menuMesh.visible = true;
         menuVal.textContent = 'Active (World-Locked)';
 
-        // Spawn 0.70m forward along horizontal gaze, 0.16m below eye level
         camera.getWorldDirection(forwardVec);
         forwardVec.y = 0;
         forwardVec.normalize();
@@ -725,7 +721,6 @@
         menuMesh.position.copy(camera.position).addScaledVector(forwardVec, 0.70);
         menuMesh.position.y += -0.16;
 
-        // Lock orientation to face user with an ergonomic upward tilt
         menuMesh.lookAt(camera.position.x, menuMesh.position.y, camera.position.z);
         menuMesh.rotateX(-0.14);
 
@@ -745,14 +740,12 @@
     controller1.add(orb1);
     controller2.add(orb2);
 
-    // Laser Pointer Line (Right Hand)
     const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.75 });
     const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1.2)]);
     const laserLine = new THREE.Line(laserGeo, laserMat);
-    controller2.add(laserLine);
+    scene.add(laserLine);
     laserLine.visible = false;
 
-    // Laser Reticle Dot on Menu Surface
     const dotMesh = new THREE.Mesh(new THREE.CircleGeometry(0.009, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, depthWrite: false }));
     dotMesh.visible = false;
     scene.add(dotMesh);
@@ -787,9 +780,7 @@
 
     window.addEventListener('pointerup', () => { isMouseDown = false; });
 
-    // =========================================================================
-    // 6. ROBUST WEBXR LAUNCHER (With Session Event Handlers)
-    // =========================================================================
+    // 6. WebXR Session Launcher
     if ('xr' in navigator) {
       navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
         if (supported) {
@@ -834,7 +825,6 @@
       menuVal.textContent = 'Closed';
     });
 
-    // Helper: Polar Mapping with Center-Compression
     function mapHandToPolar(handWorldPos) {
       const dir = new THREE.Vector3().subVectors(handWorldPos, camera.position).normalize();
       const polarDist = Math.acos(THREE.MathUtils.clamp(-dir.z, -0.9999, 0.9999));
@@ -884,14 +874,13 @@
     const smoothLeftVel = new THREE.Vector2();
     const smoothRightVel = new THREE.Vector2();
 
-    // Gesture Debounce States
     let leftPinchLatched = false;
     let rightPinchLatched = false;
 
-    // Raycaster for Spatial Menu
     const raycaster = new THREE.Raycaster();
     const rayOrigin = new THREE.Vector3();
     const rayDir = new THREE.Vector3();
+    const planeNormal = new THREE.Vector3();
 
     // 7. Kinematics & Render Loop
     let lastTime = performance.now();
@@ -905,7 +894,6 @@
 
       skyDome.position.copy(camera.position);
 
-      // Smooth Reversal Kinematics (74° harmonic oscillation)
       const baseAngularSpeed = 32.0;
       const rotSpeedMult = 0.12;
       const omega = (baseAngularSpeed * rotSpeedMult * Math.PI) / 180.0;
@@ -914,7 +902,6 @@
       uniforms.u_flow_angle.value = (currentAngleDeg * Math.PI) / 180.0;
       uniforms.u_time.value = timestamp * 0.001;
 
-      // Trail decay (0.996 persistence)
       const decay = Math.pow(0.996, dt * 90.0);
       for (let i = 0; i < TRAIL_COUNT; i++) {
         leftTrailArray[i].z *= decay;
@@ -923,17 +910,14 @@
         rightTrailArray[i].w += dt * 7.5;
       }
 
-      // Decay right shockwave
       uniforms.u_right_burst.value = Math.max(0.0, uniforms.u_right_burst.value - dt * 2.8);
 
-      // VR Tracking & Interaction
       if (renderer.xr.isPresenting) {
         let rawLeftWorld = null;
         let rawRightWorld = null;
         let leftPinch = 0.0;
         let rightPinch = 0.0;
 
-        // Optical Hands Check
         if (hand1 && hand1.joints && hand1.joints['index-finger-tip']) {
           rawLeftWorld = hand1.joints['index-finger-tip'].position;
           const thmL = hand1.joints['thumb-tip'];
@@ -951,7 +935,6 @@
           }
         }
 
-        // Controller Fallback
         const session = renderer.xr.getSession();
         if (session && session.inputSources) {
           session.inputSources.forEach((s) => {
@@ -966,7 +949,7 @@
           });
         }
 
-        // --- GESTURE 1: LEFT PINCH TOGGLES WORLD-LOCKED FLOATING MENU ---
+        // --- GESTURE 1: LEFT PINCH TOGGLES FLOATING MENU ---
         if (leftPinch > 0.78 && !leftPinchLatched) {
           leftPinchLatched = true;
           toggleMenu();
@@ -974,7 +957,6 @@
           leftPinchLatched = false;
         }
 
-        // Left Hand Smoothing & Fluid Wake
         if (rawLeftWorld) {
           if (!leftInitialized) {
             smoothLeftPos.copy(rawLeftWorld);
@@ -1014,19 +996,36 @@
         let isPointingAtMenu = false;
 
         if (menuMesh.visible && rawRightWorld) {
-          controller2.getWorldPosition(rayOrigin);
-          controller2.getWorldDirection(rayDir);
-          rayDir.negate(); // Forward in Three.js controller space is -Z
+          // Robust Raycast: Use index finger vector if tracking hands, else controller orientation
+          if (hand2 && hand2.joints && hand2.joints['index-finger-tip'] && hand2.joints['index-finger-phalanx-proximal']) {
+            const tip = hand2.joints['index-finger-tip'].position;
+            const prox = hand2.joints['index-finger-phalanx-proximal'].position;
+            rayOrigin.copy(tip);
+            rayDir.subVectors(tip, prox).normalize();
+          } else {
+            controller2.getWorldPosition(rayOrigin);
+            controller2.getWorldDirection(rayDir).negate();
+          }
 
           raycaster.set(rayOrigin, rayDir);
-          const intersects = raycaster.intersectObject(menuMesh);
+          const intersects = raycaster.intersectObject(menuMesh, false);
 
-          if (intersects.length > 0) {
+          if (intersects.length > 0 && intersects[0].uv) {
             isPointingAtMenu = true;
-            laserLine.visible = true;
 
             const hit = intersects[0];
-            dotMesh.position.copy(hit.point).addScaledVector(hit.face.normal, 0.002);
+
+            // Render laser beam between pointer origin and intersection point
+            const positions = laserLine.geometry.attributes.position.array;
+            positions[0] = rayOrigin.x; positions[1] = rayOrigin.y; positions[2] = rayOrigin.z;
+            positions[3] = hit.point.x; positions[4] = hit.point.y; positions[5] = hit.point.z;
+            laserLine.geometry.attributes.position.needsUpdate = true;
+            laserLine.visible = true;
+
+            // Compute menu world normal without relying on hit.face
+            planeNormal.set(0, 0, 1).applyQuaternion(menuMesh.quaternion);
+
+            dotMesh.position.copy(hit.point).addScaledVector(planeNormal, 0.003);
             dotMesh.quaternion.copy(menuMesh.quaternion);
             dotMesh.visible = true;
 
@@ -1073,7 +1072,7 @@
           dotMesh.visible = false;
         }
 
-        // Right Hand Shockwave & Fluid Wake
+        // Right Hand Fluid Displacement & Shockwave
         if (rawRightWorld) {
           if (!rightInitialized) {
             smoothRightPos.copy(rawRightWorld);
@@ -1092,7 +1091,6 @@
 
           if (smoothRightVel.length() < 0.03) smoothRightVel.set(0, 0);
 
-          // Right Hand Luminous Shockwave (When not pointing at menu)
           if (rightPinch > 0.75 && !rightPinchLatched && !isPointingAtMenu) {
             rightPinchLatched = true;
             uniforms.u_right_burst.value = 1.6;
