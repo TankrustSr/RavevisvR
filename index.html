@@ -95,15 +95,16 @@
   <div id="err-banner"></div>
 
   <div id="ui-hud">
-    <h2>💎 K1 Focal-Enhanced Dome</h2>
+    <h2>💎 K1 Anti-Aliased Dome</h2>
     Mode: <span id="mode-val" class="val">2D Browser Window</span><br>
+    Anti-Aliasing: <span class="val">4x MSAA + 1.25x SS</span><br>
     Left Hand: <span id="left-val" class="val">Resting</span><br>
     Right Hand: <span id="right-val" class="val">Resting</span>
     <div class="hud-controls">
-      • <b>Center Detail:</b> Compressed forward optics for high-density sacred geometry.<br>
-      • <b>Water Ripple Force:</b> Softened to 1/3 intensity for graceful silk ripples.<br>
-      • <b>Hands at Sides / Down:</b> Ripples sleep; patterns stay pristine.<br>
-      • <b>Reach Out Forward:</b> Subtle capillary waves trail behind hand movements.
+      • <b>3-Tier AA:</b> 4x Hardware MSAA + 1.25x Framebuffer Supersampling.<br>
+      • <b>Shader AA:</b> C-infinity analytic filters remove subpixel line shimmer.<br>
+      • <b>Center Detail:</b> Compressed forward optics for fine filigree.<br>
+      • <b>Water Ripples:</b> Softened to 1/3 intensity with reach gating.
     </div>
   </div>
 
@@ -129,14 +130,24 @@
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 0, 0.1);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(1.0); // 1.0 DPR locks 90 FPS on Quest 3
+    // Hardware Antialiasing Enabled (4x MSAA on Quest 3 TBDR GPU)
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      powerPreference: 'high-performance'
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1.0, 2.0));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
+
+    // WebXR Supersampling Factor: 1.25x renders at native Quest 3 display resolution
+    if (renderer.xr.setFramebufferScaleFactor) {
+      renderer.xr.setFramebufferScaleFactor(1.25);
+    }
     container.appendChild(renderer.domElement);
 
-    // 2. Geometry & Single-Pass Focal-Compressed Fluid Shader
-    const domeGeo = new THREE.SphereGeometry(60, 48, 24);
+    // 2. Geometry & Analytic Anti-Aliased Fluid Shader
+    const domeGeo = new THREE.SphereGeometry(60, 64, 32);
 
     const vertexShader = `
       varying vec3 vDirection;
@@ -165,14 +176,12 @@
       uniform float u_contrast;
       uniform float u_grain_level;
 
-      // 12-Stage Persistent Hand Trails
       const int TRAIL_COUNT = 12;
       uniform vec4 u_left_trail[TRAIL_COUNT];
       uniform vec2 u_left_vels[TRAIL_COUNT];
       uniform vec4 u_right_trail[TRAIL_COUNT];
       uniform vec2 u_right_vels[TRAIL_COUNT];
 
-      // K1 Color Palette
       uniform vec3 u_col_shadow;
       uniform vec3 u_col_cool_a;
       uniform vec3 u_col_cool_b;
@@ -221,6 +230,7 @@
         return dot(h.xy, h.xy) < dot(h.zw, h.zw) ? vec4(h.xy, hC.xy) : vec4(h.zw, hC.zw + 9.73);
       }
 
+      // Smooth-filtered Flower of Life (no aliased pixel steps)
       float flowerOfLife(vec2 p) {
         vec4 h = hexCoords(p * 2.4);
         vec2 pCell = h.xy;
@@ -233,9 +243,10 @@
         float d6 = abs(length(pCell - vec2(-0.5, 0.866025)) - circleR);
         float d7 = abs(length(pCell + vec2(-0.5, 0.866025)) - circleR);
         float minD = min(min(min(d1, d2), min(d3, d4)), min(min(d5, d6), d7));
-        return 1.0 - smoothstep(0.04, 0.12, minD);
+        return 1.0 - smoothstep(0.02, 0.16, minD);
       }
 
+      // Smooth-filtered Rhombille Diamond wireframes
       vec3 rhombilleDiamonds(vec2 p) {
         vec2 s = vec2(1.7320508, 1.0);
         vec2 a = mod(p, s) - s * 0.5;
@@ -247,19 +258,17 @@
         float facetID = mod(sector, 3.0);
         vec2 diamondUV = abs(g);
         float dEdge = max(diamondUV.x * 0.5 + diamondUV.y * 0.866025, diamondUV.x);
-        float wire = 1.0 - smoothstep(0.44, 0.49, dEdge);
+        float wire = 1.0 - smoothstep(0.40, 0.51, dEdge);
         return vec3(facetID, wire, dEdge);
       }
 
       void main() {
         vec3 ray = normalize(vDirection);
 
-        // --- FOCAL CENTER DETAIL ENHANCEMENT ---
-        // Measures angle from direct forward direction (-Z)
+        // Focal Center Coordinate Expansion
         float polarDist = acos(clamp(-ray.z, -0.9999, 0.9999));
         float polarAngle = atan(ray.y, ray.x + 1e-5) + u_kaleido_angle;
 
-        // Compresses center coordinate space (pow 0.72) to increase spatial detail density by 2.2x
         const float PI = 3.14159265359;
         float focalDist = pow(polarDist / PI, 0.72) * PI * 1.5;
 
@@ -277,7 +286,7 @@
         float totalRipples = 0.0;
         float handWakeGlow = 0.0;
 
-        // Left Hand Trail (1/3 strength)
+        // Left Hand Trail
         for (int i = 0; i < TRAIL_COUNT; i++) {
           vec4 tL = u_left_trail[i];
           if (tL.z > 0.005) {
@@ -293,7 +302,7 @@
           }
         }
 
-        // Right Hand Trail (1/3 strength)
+        // Right Hand Trail
         for (int i = 0; i < TRAIL_COUNT; i++) {
           vec4 tR = u_right_trail[i];
           if (tR.z > 0.005) {
@@ -317,7 +326,7 @@
         mat2 alignFlow = mat2(cos(rad), sin(rad), -sin(rad), cos(rad));
         vec2 p = alignFlow * st * vec2(0.55, u_flow_stretch);
 
-        // Sacred Chamber Geometry (Higher density rhombille diamonds & filigree)
+        // Sacred Chamber Geometry
         float radDist = length(p);
         float angleP = atan(p.y, p.x + 1e-5);
         vec2 kDistort = vec2(fbm(p * 2.0 + t * 0.15), fbm(p * 2.0 - t * 0.12)) * (u_warp_scale * 0.22);
@@ -329,25 +338,33 @@
         float fol = flowerOfLife(kp * 2.2);
         float ringWaves = abs(sin(radDist * 32.0 - t * 1.2 + sin(angleP * 12.0) * 0.4));
         float chevrons = abs(sin(angleP * 24.0 + radDist * 22.0));
-        float beads = 1.0 - smoothstep(0.12, 0.28, length(fract(vec2(angleP * 3.82, radDist * 7.5)) - 0.5));
+        float beads = 1.0 - smoothstep(0.10, 0.32, length(fract(vec2(angleP * 3.82, radDist * 7.5)) - 0.5));
         float filigreeLace = max(fol * 0.85, chevrons * 0.5) + ringWaves * 0.45 + beads * 0.55;
 
-        // Retain fine filigree throughout the center forward area
         float centerMask = 1.0 - smoothstep(0.40, 0.90, radDist);
         float f = filigreeLace + (facetShade * 0.45 + rBlocks.y * 0.35) * centerMask;
 
-        // 1/3 intensity ripples injected into field
         f += totalRipples * 0.12;
         vec2 r = vec2(cos(angleP), sin(angleP)) * f;
 
-        // Prismatic Spectral Splitting
+        // --- CONTINUOUS ANALYTIC ANTIALIASING FOR RIDGES ---
+        // Power-of-sine functions produce smooth Hermite gradients without jagged threshold cutoffs
         float freq = u_contour_freq;
         float chroma = u_chroma_aberration * 0.22;
-        float ridgeR = abs(sin(f * freq + (r.x + r.y) * 1.5 + chroma));
-        float ridgeG = abs(sin(f * freq + (r.x + r.y) * 1.5));
-        float ridgeB = abs(sin(f * freq + (r.x + r.y) * 1.5 - chroma));
-        vec3 ridges = vec3(smoothstep(0.65, 0.95, ridgeR), smoothstep(0.65, 0.95, ridgeG), smoothstep(0.65, 0.95, ridgeB));
-        float bands = smoothstep(0.15, 0.85, sin(f * (freq * 0.45) + r.x * 2.5));
+        
+        float sR = sin(f * freq + (r.x + r.y) * 1.5 + chroma);
+        float sG = sin(f * freq + (r.x + r.y) * 1.5);
+        float sB = sin(f * freq + (r.x + r.y) * 1.5 - chroma);
+
+        vec3 ridges = vec3(
+          pow(max(sR, 0.0), 3.5),
+          pow(max(sG, 0.0), 3.5),
+          pow(max(sB, 0.0), 3.5)
+        );
+
+        // Smooth contour bands
+        float fold = sin(f * (freq * 0.45) + r.x * 2.5);
+        float bands = smoothstep(0.05, 0.95, fold);
 
         // Faceted 3D Surface Normal Lighting
         vec3 normalPerturb = vec3(sin(rBlocks.z * 18.0), cos(rBlocks.z * 18.0), 0.0) * centerMask * 0.85;
@@ -359,7 +376,7 @@
         float spec = pow(max(dot(normal, halfVec), 0.0), 22.0) * u_specular_shimmer;
         float fresnel = pow(clamp(1.0 - max(dot(normal, viewDir), 0.0), 0.0, 1.0), 3.0) * u_rim_glow;
 
-        // Exact K1 Palette Harmonization
+        // K1 Palette Harmonization
         vec3 col = mix(u_col_shadow, u_col_cool_a, clamp((f * f) * (3.2 * u_contrast), 0.0, 1.0));
         col = mix(col, u_col_cool_b, clamp(length(kDistort) * 0.9 + 0.35, 0.0, 1.0));
         col = mix(col, u_col_warm_b, clamp(r.x * r.x * (2.2 * u_contrast), 0.0, 1.0));
@@ -369,13 +386,12 @@
         col += u_col_crest * spec * 1.4;
         col += mix(u_col_cool_b, u_col_crest, 0.65) * fresnel;
 
-        // Softened wake luminescence
         col += vec3(0.2, 0.85, 1.0) * handWakeGlow * 0.18;
-
         col *= (0.75 + 0.45 * f * u_contrast);
 
+        // Minimal film dither
         if (u_grain_level > 0.001) {
-          float grain = (hash1(gl_FragCoord.xy + fract(u_time * 0.1)) - 0.5) * u_grain_level;
+          float grain = (hash1(gl_FragCoord.xy + fract(u_time * 0.1)) - 0.5) * (u_grain_level * 0.5);
           col += grain;
         }
 
@@ -410,7 +426,7 @@
       u_specular_shimmer:  { value: 0.85 },
       u_rim_glow:          { value: 0.40 },
       u_contrast:          { value: 1.10 },
-      u_grain_level:       { value: 0.03 },
+      u_grain_level:       { value: 0.02 },
 
       u_left_trail:        { value: leftTrailArray },
       u_left_vels:         { value: leftVelsArray },
@@ -436,7 +452,7 @@
     const skyDome = new THREE.Mesh(domeGeo, domeMat);
     scene.add(skyDome);
 
-    // 3. VR Controllers & Hand Pointers
+    // 3. VR Controllers & Hand Indicators
     const controller1 = renderer.xr.getController(0);
     const controller2 = renderer.xr.getController(1);
     scene.add(controller1);
@@ -453,7 +469,7 @@
     if (hand1) scene.add(hand1);
     if (hand2) scene.add(hand2);
 
-    // 4. Fallback 2D Mouse Drag Controls
+    // 4. 2D Fallback Drag Controls
     let isMouseDown = false;
     let prevMouseNorm = new THREE.Vector2();
 
@@ -478,7 +494,7 @@
 
     window.addEventListener('pointerup', () => { isMouseDown = false; });
 
-    // 5. Native Quest WebXR Session Launcher
+    // 5. Quest WebXR Session Launcher
     if ('xr' in navigator) {
       navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
         if (supported) {
@@ -505,13 +521,12 @@
       });
     }
 
-    // Helper: Map 3D Hand Direction to Polar Coordinates (Matches shader focal curve)
+    // Helper: Map 3D Hand Direction to Polar Coordinates
     function mapHandToPolar(handWorldPos) {
       const dir = new THREE.Vector3().subVectors(handWorldPos, camera.position).normalize();
       const polarDist = Math.acos(THREE.MathUtils.clamp(-dir.z, -0.9999, 0.9999));
       let polarAngle = Math.atan2(dir.y, dir.x + 1e-5) + (30.0 * Math.PI) / 180.0;
 
-      // Focal curve matching the fragment shader
       const focalDist = Math.pow(polarDist / Math.PI, 0.72) * Math.PI * 1.5;
 
       const tau = Math.PI * 2.0;
@@ -523,7 +538,7 @@
       return new THREE.Vector2(Math.cos(foldA) * focalDist, Math.sin(foldA) * focalDist);
     }
 
-    // Natural Reach & Elevation Gating Analysis
+    // Reach Gating Analysis
     const invCamRot = new THREE.Quaternion();
     const localHandPos = new THREE.Vector3();
 
@@ -535,17 +550,14 @@
       const headDist = localHandPos.length();
       const elevation = localHandPos.y;
 
-      // Hands down or by sides: Zero ripples
       if (fwdReach < 0.16 || elevation < -0.42) {
         return 0.0;
       }
 
-      // Smooth onset and elevation damping
       const reachFactor = THREE.MathUtils.smoothstep(fwdReach, 0.18, 0.58);
       const headFactor = THREE.MathUtils.smoothstep(headDist, 0.20, 0.35);
       const farBoost = 1.0 + Math.max(0.0, fwdReach - 0.42) * 1.4;
 
-      // Scaled down to 1/3 intensity baseline
       return THREE.MathUtils.clamp(reachFactor * headFactor * farBoost * 0.4, 0.0, 1.1);
     }
 
@@ -562,7 +574,7 @@
     const smoothLeftVel = new THREE.Vector2();
     const smoothRightVel = new THREE.Vector2();
 
-    // 6. Kinematics & Animation Loop
+    // 6. Kinematics & Render Loop
     let lastTime = performance.now();
     let pingPongPhase = Math.asin(Math.min(Math.max(74.0 / 180.0, -1.0), 1.0));
 
@@ -583,7 +595,7 @@
       uniforms.u_flow_angle.value = (currentAngleDeg * Math.PI) / 180.0;
       uniforms.u_time.value = timestamp * 0.001;
 
-      // 0.996 persistence trail decay
+      // 0.996 persistence decay
       const decay = Math.pow(0.996, dt * 90.0);
       for (let i = 0; i < TRAIL_COUNT; i++) {
         leftTrailArray[i].z *= decay;
@@ -592,7 +604,7 @@
         rightTrailArray[i].w += dt * 7.5;
       }
 
-      // Hand Tracking & Input Processing in VR
+      // Hand Tracking in VR
       if (renderer.xr.isPresenting) {
         let rawLeftWorld = null;
         let rawRightWorld = null;
@@ -630,7 +642,7 @@
           });
         }
 
-        // Left Hand Smoothing & Trail Emission
+        // Left Hand Smoothing
         if (rawLeftWorld) {
           if (!leftInitialized) {
             smoothLeftPos.copy(rawLeftWorld);
@@ -666,7 +678,7 @@
           leftVal.textContent = 'Idle';
         }
 
-        // Right Hand Smoothing & Trail Emission
+        // Right Hand Smoothing
         if (rawRightWorld) {
           if (!rightInitialized) {
             smoothRightPos.copy(rawRightWorld);
