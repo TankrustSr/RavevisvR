@@ -96,13 +96,13 @@
 
   <div id="ui-hud">
     <h2>💎 K1 Fluid Dome (Quest 3)</h2>
-    Status: <span id="mode-val" class="val">2D Browser Window</span><br>
+    Mode: <span id="mode-val" class="val">2D Browser Window</span><br>
     Left Hand: <span id="left-val" class="val">Idle</span><br>
     Right Hand: <span id="right-val" class="val">Idle</span>
     <div class="hud-controls">
-      • <b>In VR:</b> Reach out to wave your hands; ripples radiate outward into the dome.<br>
-      • <b>Pinch / Trigger:</b> Acoustic shockwave impulse.<br>
-      • <b>Thumbstick Click / Grip:</b> Clear fluid canvas.
+      • <b>In VR:</b> Move your physical hands to slice and swirl the fluid currents.<br>
+      • <b>Index Pinch / Trigger:</b> Radiate luminous capillary ripples and wakes.<br>
+      • <b>Harmonic Angle:</b> Oscillates in smooth reversal at 74°.
     </div>
   </div>
 
@@ -129,132 +129,15 @@
     camera.position.set(0, 0, 0.1);
 
     const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(1.0); // 1.0 DPR locks high frame stability on Snapdragon XR2
+    renderer.setPixelRatio(1.0); // 1.0 DPR locks 90 FPS on Snapdragon XR2
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // Ensure float texture rendering capability
-    const gl = renderer.getContext();
-    const hasFloat = gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float');
-    const rtType = hasFloat ? THREE.HalfFloatType : THREE.UnsignedByteType;
-
-    // 2. GPGPU Ping-Pong Water Simulation Setup
-    const simRes = 1024;
-    const simRT1 = new THREE.WebGLRenderTarget(simRes, simRes, {
-      type: rtType,
-      format: THREE.RGBAFormat,
-      minFilter: THREE.LinearFilter,
-      magFilter: THREE.LinearFilter
-    });
-    const simRT2 = simRT1.clone();
-    let currentSimRead = simRT1;
-    let currentSimWrite = simRT2;
-
-    const simCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    const simScene = new THREE.Scene();
-    const simQuadGeo = new THREE.PlaneGeometry(2, 2);
-
-    // Physical Water Wake & Ripple Shader (Exact K1 dynamics)
-    const simFS = `
-      precision highp float;
-      varying vec2 vUv;
-
-      uniform sampler2D u_prevBuffer;
-      uniform vec2 u_resolution;
-      uniform float u_persistence;
-      uniform float u_hand_force;
-      uniform float u_ripple_freq;
-      uniform float u_time;
-
-      uniform vec2 u_pointer;
-      uniform vec2 u_pointer_vel;
-      uniform float u_pointer_active;
-
-      uniform vec2 u_left_hand;
-      uniform vec2 u_left_vel;
-      uniform float u_left_active;
-
-      uniform vec2 u_right_hand;
-      uniform vec2 u_right_vel;
-      uniform float u_right_active;
-
-      vec2 calcImpulse(vec2 st, vec2 targetPos, vec2 vel, float active, float forceMult) {
-        if (active < 0.01) return vec2(0.0);
-        vec2 toTarget = st - targetPos;
-        float d = length(toTarget);
-        vec2 dir = toTarget / (d + 0.001);
-        float speed = length(vel);
-        float effectiveForce = active * forceMult;
-
-        // Water Wake & Harmonic Capillary Ripples
-        float wavePhase = (d * u_ripple_freq) - u_time * 6.5;
-        float wave = sin(wavePhase) * exp(-d * 3.4);
-        float wake = exp(-d * 2.6);
-        float forwardDot = max(dot(dir, vel / (speed + 0.001)), -0.3);
-
-        vec2 impulse = dir * (wave * (0.45 + speed * 2.8)) * effectiveForce;
-        impulse += vel * (wake * (0.8 + forwardDot * 0.6)) * effectiveForce;
-        return impulse;
-      }
-
-      void main() {
-        vec2 st = vUv * 2.0 - 1.0;
-        vec2 totalImpulse = vec2(0.0);
-
-        totalImpulse += calcImpulse(st, u_pointer, u_pointer_vel, u_pointer_active, 1.2);
-        totalImpulse += calcImpulse(st, u_left_hand, u_left_vel, u_left_active, u_hand_force);
-        totalImpulse += calcImpulse(st, u_right_hand, u_right_vel, u_right_active, u_hand_force);
-
-        vec2 uvDelta = totalImpulse * 0.007;
-        vec2 advectedUV = clamp(vUv - uvDelta, 0.001, 0.999);
-        vec2 prevDisp = texture2D(u_prevBuffer, advectedUV).xy;
-        vec2 finalDisp = (prevDisp + totalImpulse * 0.25) * u_persistence;
-
-        gl_FragColor = vec4(finalDisp, 0.0, 1.0);
-      }
-    `;
-
-    const simVS = `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = vec4(position.xy, 0.0, 1.0);
-      }
-    `;
-
-    const simUniforms = {
-      u_prevBuffer:      { value: null },
-      u_resolution:      { value: new THREE.Vector2(simRes, simRes) },
-      u_persistence:     { value: 0.996 }, // Exact K1 persistence
-      u_hand_force:      { value: 1.30 },  // Exact K1 hand force
-      u_ripple_freq:     { value: 28.0 },  // Exact K1 ripple frequency
-      u_time:            { value: 0.0 },
-
-      u_pointer:         { value: new THREE.Vector2(0.0, 0.0) },
-      u_pointer_vel:     { value: new THREE.Vector2(0.0, 0.0) },
-      u_pointer_active:  { value: 0.0 },
-
-      u_left_hand:       { value: new THREE.Vector2(0.0, 0.0) },
-      u_left_vel:        { value: new THREE.Vector2(0.0, 0.0) },
-      u_left_active:     { value: 0.0 },
-
-      u_right_hand:      { value: new THREE.Vector2(0.0, 0.0) },
-      u_right_vel:       { value: new THREE.Vector2(0.0, 0.0) },
-      u_right_active:    { value: 0.0 }
-    };
-
-    const simMat = new THREE.ShaderMaterial({
-      vertexShader: simVS,
-      fragmentShader: simFS,
-      uniforms: simUniforms
-    });
-    simScene.add(new THREE.Mesh(simQuadGeo, simMat));
-
-    // 3. 360° Sacred Chamber Dome (No space bending, true bilateral kaleidoscope symmetry)
+    // 2. Geometry & Analytical Single-Pass Water Shader
     const domeGeo = new THREE.SphereGeometry(60, 48, 24);
 
-    const displayVS = `
+    const vertexShader = `
       varying vec3 vDirection;
       void main() {
         vDirection = position;
@@ -262,11 +145,10 @@
       }
     `;
 
-    const displayFS = `
+    const fragmentShader = `
       precision highp float;
       varying vec3 vDirection;
 
-      uniform sampler2D u_simTexture;
       uniform float u_time;
       uniform float u_flow_angle;
       uniform float u_speed;
@@ -282,6 +164,16 @@
       uniform float u_contrast;
       uniform float u_grain_level;
 
+      // Analytical Hand Interaction Uniforms
+      uniform vec2 u_left_pos;
+      uniform vec2 u_left_vel;
+      uniform float u_left_active;
+
+      uniform vec2 u_right_pos;
+      uniform vec2 u_right_vel;
+      uniform float u_right_active;
+
+      // K1 Color Palette
       uniform vec3 u_col_shadow;
       uniform vec3 u_col_cool_a;
       uniform vec3 u_col_cool_b;
@@ -363,11 +255,11 @@
       void main() {
         vec3 ray = normalize(vDirection);
 
-        // 360° Spherical Projection
+        // Pristine 360° Spherical Polar Projection (NO bending / tunnels)
         float polarDist = acos(clamp(-ray.z, -0.9999, 0.9999));
         float polarAngle = atan(ray.y, ray.x + 1e-5) + u_kaleido_angle;
 
-        // 6-Petal Bilateral Symmetry
+        // 6-Petal Bilateral Kaleidoscope Mirroring
         float tau = 6.28318530718;
         float segAngle = tau / max(u_kaleido_segs, 1.0);
         float modA = mod(polarAngle, segAngle);
@@ -376,18 +268,34 @@
 
         vec2 st = vec2(cos(foldA), sin(foldA)) * polarDist * 1.4;
 
-        // Sample water ripple velocity directly from physical simulation buffer
-        vec2 simUV = clamp((vec2(ray.x, ray.y) / max(polarDist + 0.35, 0.8)) * 0.5 + 0.5, 0.0, 1.0);
-        vec2 waterFlow = texture2D(u_simTexture, simUV).xy;
-        st += waterFlow * 0.45;
+        // --- PHYSICAL WATER DISTURBANCES & HAND WAKES ---
+        // Left Hand Hydrodynamics
+        vec2 toLeft = st - u_left_pos;
+        float dL = length(toLeft);
+        float forceL = exp(-dL * 2.8) * u_left_active;
+        vec2 vortexL = vec2(-toLeft.y, toLeft.x) / (dL + 0.12);
+        vec2 wakeL = u_left_vel * exp(-dL * 2.2);
+        float rippleL = sin(dL * 28.0 - u_time * 7.5) * exp(-dL * 3.2) * u_left_active;
 
-        // Harmonic Drift & Tensor Flow Alignment
+        // Right Hand Hydrodynamics
+        vec2 toRight = st - u_right_pos;
+        float dR = length(toRight);
+        float forceR = exp(-dR * 2.8) * u_right_active;
+        vec2 vortexR = vec2(-toRight.y, toRight.x) / (dR + 0.12);
+        vec2 wakeR = u_right_vel * exp(-dR * 2.2);
+        float rippleR = sin(dR * 28.0 - u_time * 7.5) * exp(-dR * 3.2) * u_right_active;
+
+        // Displace the coordinate plane with physical wakes and swirls
+        st += (vortexL * 0.45 + wakeL * 0.4) * forceL;
+        st += (vortexR * 0.45 + wakeR * 0.4) * forceR;
+
+        // Directional Anisotropic Ribbon Alignment
         float t = u_time * u_speed;
         float rad = u_flow_angle;
         mat2 alignFlow = mat2(cos(rad), sin(rad), -sin(rad), cos(rad));
         vec2 p = alignFlow * st * vec2(0.55, u_flow_stretch);
 
-        // Sacred Chamber Archetype
+        // Sacred Chamber Geometry
         float radDist = length(p);
         float angleP = atan(p.y, p.x + 1e-5);
         vec2 kDistort = vec2(fbm(p * 1.8 + t * 0.15), fbm(p * 1.8 - t * 0.12)) * (u_warp_scale * 0.22);
@@ -404,6 +312,9 @@
         float filigreeLace = max(fol * 0.8, chevrons * 0.5) + ringWaves * 0.4 + beads * 0.5;
 
         float f = mix(filigreeLace, facetShade * 1.2 + rBlocks.y * 0.6, centerMask);
+        
+        // Inject water ripples directly into the contour density
+        f += (rippleL + rippleR) * 0.32;
         vec2 r = vec2(cos(angleP), sin(angleP)) * f;
 
         // Prismatic Spectral Splitting
@@ -435,8 +346,8 @@
         col += u_col_crest * spec * 1.4;
         col += mix(u_col_cool_b, u_col_crest, 0.65) * fresnel;
 
-        // Water Wake Luminescence
-        col += vec3(0.15, 0.75, 1.0) * length(waterFlow) * 0.75;
+        // Interactive Hand Wake Luminous Highlights
+        col += vec3(0.2, 0.85, 1.0) * (forceL + forceR) * 0.55;
 
         col *= (0.75 + 0.45 * f * u_contrast);
 
@@ -449,8 +360,7 @@
       }
     `;
 
-    const displayUniforms = {
-      u_simTexture:        { value: null },
+    const uniforms = {
       u_time:              { value: 0.0 },
       u_flow_angle:        { value: (74.0 * Math.PI) / 180.0 },
       u_speed:             { value: 1.00 },
@@ -466,6 +376,14 @@
       u_contrast:          { value: 1.10 },
       u_grain_level:       { value: 0.03 },
 
+      u_left_pos:          { value: new THREE.Vector2(10.0, 10.0) },
+      u_left_vel:          { value: new THREE.Vector2(0.0, 0.0) },
+      u_left_active:       { value: 0.0 },
+
+      u_right_pos:         { value: new THREE.Vector2(10.0, 10.0) },
+      u_right_vel:         { value: new THREE.Vector2(0.0, 0.0) },
+      u_right_active:      { value: 0.0 },
+
       u_col_shadow:        { value: new THREE.Color('#1c1412') },
       u_col_cool_a:        { value: new THREE.Color('#7e5234') },
       u_col_cool_b:        { value: new THREE.Color('#df7b6c') },
@@ -474,18 +392,18 @@
       u_col_crest:         { value: new THREE.Color('#ffffff') }
     };
 
-    const displayMat = new THREE.ShaderMaterial({
-      vertexShader: displayVS,
-      fragmentShader: displayFS,
-      uniforms: displayUniforms,
+    const domeMat = new THREE.ShaderMaterial({
+      vertexShader: vertexShader,
+      fragmentShader: fragmentShader,
+      uniforms: uniforms,
       side: THREE.DoubleSide,
       depthWrite: false
     });
 
-    const skyDome = new THREE.Mesh(domeGeo, displayMat);
+    const skyDome = new THREE.Mesh(domeGeo, domeMat);
     scene.add(skyDome);
 
-    // 4. VR Controllers & Hand Indicators
+    // 3. VR Controllers & Hand Pointers
     const controller1 = renderer.xr.getController(0);
     const controller2 = renderer.xr.getController(1);
     scene.add(controller1);
@@ -502,50 +420,36 @@
     if (hand1) scene.add(hand1);
     if (hand2) scene.add(hand2);
 
-    // 5. 2D Drag Controls (Fallback for Flat Browser Window)
-    let isDragging = false;
-    let prevX = 0, prevY = 0;
-    let lon = 0, lat = 0;
+    // 4. Fallback 2D Mouse/Touch Pointer
+    let isMouseDown = false;
+    let prevMouseNorm = new THREE.Vector2();
 
     window.addEventListener('pointerdown', (e) => {
       if (renderer.xr.isPresenting) return;
-      isDragging = true;
-      prevX = e.clientX;
-      prevY = e.clientY;
-      simUniforms.u_pointer_active.value = 1.0;
+      isMouseDown = true;
+      const x = (e.clientX / window.innerWidth) * 2 - 1;
+      const y = -(e.clientY / window.innerHeight) * 2 + 1;
+      prevMouseNorm.set(x, y);
+      uniforms.u_right_pos.value.set(x, y);
+      uniforms.u_right_active.value = 1.0;
     });
 
     window.addEventListener('pointermove', (e) => {
-      if (!isDragging || renderer.xr.isPresenting) return;
-      const dx = e.clientX - prevX;
-      const dy = e.clientY - prevY;
-      prevX = e.clientX;
-      prevY = e.clientY;
-
-      lon -= dx * 0.25;
-      lat = Math.max(-85, Math.min(85, lat + dy * 0.25));
-
-      const phi = THREE.MathUtils.degToRad(90 - lat);
-      const theta = THREE.MathUtils.degToRad(lon);
-
-      const target = new THREE.Vector3();
-      target.x = Math.sin(phi) * Math.cos(theta);
-      target.y = Math.cos(phi);
-      target.z = Math.sin(phi) * Math.sin(theta);
-      camera.lookAt(target);
-
-      const normX = (e.clientX / window.innerWidth) * 2 - 1;
-      const normY = -(e.clientY / window.innerHeight) * 2 + 1;
-      simUniforms.u_pointer.value.set(normX, normY);
-      simUniforms.u_pointer_vel.value.set(dx * 0.05, -dy * 0.05);
+      if (!isMouseDown || renderer.xr.isPresenting) return;
+      const x = (e.clientX / window.innerWidth) * 2 - 1;
+      const y = -(e.clientY / window.innerHeight) * 2 + 1;
+      const vel = new THREE.Vector2(x - prevMouseNorm.x, y - prevMouseNorm.y).multiplyScalar(15.0);
+      prevMouseNorm.set(x, y);
+      uniforms.u_right_pos.value.set(x, y);
+      uniforms.u_right_vel.value.copy(vel);
     });
 
     window.addEventListener('pointerup', () => {
-      isDragging = false;
-      simUniforms.u_pointer_active.value = 0.0;
+      isMouseDown = false;
+      uniforms.u_right_active.value = 0.0;
     });
 
-    // 6. WebXR Session Management
+    // 5. Native Quest WebXR Session Launcher
     if ('xr' in navigator) {
       navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
         if (supported) {
@@ -572,14 +476,27 @@
       });
     }
 
-    // 7. Kinematics & Isolated Render Loop
+    // Helper: Map 3D Hand Direction directly to Polar Coordinates
+    function mapHandToPolar(handWorldPos) {
+      const dir = new THREE.Vector3().subVectors(handWorldPos, camera.position).normalize();
+      const polarDist = Math.acos(THREE.MathUtils.clamp(-dir.z, -0.9999, 0.9999));
+      let polarAngle = Math.atan2(dir.y, dir.x + 1e-5) + (30.0 * Math.PI) / 180.0;
+
+      const tau = Math.PI * 2.0;
+      const segAngle = tau / 6.0;
+      let modA = polarAngle % segAngle;
+      if (modA < 0.0) modA += segAngle;
+      const foldA = Math.abs(modA - segAngle * 0.5);
+
+      return new THREE.Vector2(Math.cos(foldA) * polarDist * 1.4, Math.sin(foldA) * polarDist * 1.4);
+    }
+
+    // 6. Kinematics & Animation Loop
     let lastTime = performance.now();
     let pingPongPhase = Math.asin(Math.min(Math.max(74.0 / 180.0, -1.0), 1.0));
 
-    let prevLeftNorm = new THREE.Vector2();
-    let prevRightNorm = new THREE.Vector2();
-    const invCamRot = new THREE.Quaternion();
-    const relPos = new THREE.Vector3();
+    let prevLeftPos = new THREE.Vector2();
+    let prevRightPos = new THREE.Vector2();
 
     renderer.setAnimationLoop((timestamp) => {
       const now = performance.now();
@@ -587,7 +504,7 @@
       lastTime = now;
       if (dt > 0.1) dt = 0.1;
 
-      // Keep dome locked to the viewer's head origin
+      // Lock dome to user's head position
       skyDome.position.copy(camera.position);
 
       // Smooth Reversal Kinematics (74° harmonic oscillation)
@@ -596,33 +513,30 @@
       const omega = (baseAngularSpeed * rotSpeedMult * Math.PI) / 180.0;
       pingPongPhase += omega * dt;
       const currentAngleDeg = 180.0 * Math.sin(pingPongPhase);
-      displayUniforms.u_flow_angle.value = (currentAngleDeg * Math.PI) / 180.0;
-      displayUniforms.u_time.value = timestamp * 0.001;
-      simUniforms.u_time.value = timestamp * 0.001;
+      uniforms.u_flow_angle.value = (currentAngleDeg * Math.PI) / 180.0;
+      uniforms.u_time.value = timestamp * 0.001;
 
-      // Process Hand Interaction in VR
+      // Hand / Controller Tracking in VR
       if (renderer.xr.isPresenting) {
-        invCamRot.copy(camera.quaternion).invert();
-
-        let leftPos = null;
-        let rightPos = null;
+        let leftWorld = null;
+        let rightWorld = null;
         let leftPinch = 0.0;
         let rightPinch = 0.0;
 
-        // Optical hands detection
+        // Optical hands check
         if (hand1 && hand1.joints && hand1.joints['index-finger-tip']) {
-          leftPos = hand1.joints['index-finger-tip'].position;
+          leftWorld = hand1.joints['index-finger-tip'].position;
           const thmL = hand1.joints['thumb-tip'];
           if (thmL) {
-            const dist = leftPos.distanceTo(thmL.position);
+            const dist = leftWorld.distanceTo(thmL.position);
             leftPinch = THREE.MathUtils.clamp(1.0 - (dist - 0.015) / 0.035, 0.0, 1.0);
           }
         }
         if (hand2 && hand2.joints && hand2.joints['index-finger-tip']) {
-          rightPos = hand2.joints['index-finger-tip'].position;
+          rightWorld = hand2.joints['index-finger-tip'].position;
           const thmR = hand2.joints['thumb-tip'];
           if (thmR) {
-            const dist = rightPos.distanceTo(thmR.position);
+            const dist = rightWorld.distanceTo(thmR.position);
             rightPinch = THREE.MathUtils.clamp(1.0 - (dist - 0.015) / 0.035, 0.0, 1.0);
           }
         }
@@ -631,83 +545,49 @@
         const session = renderer.xr.getSession();
         if (session && session.inputSources) {
           session.inputSources.forEach((s) => {
-            if (s.handedness === 'left' && !leftPos) leftPos = controller1.position;
-            if (s.handedness === 'right' && !rightPos) rightPos = controller2.position;
+            if (s.handedness === 'left' && !leftWorld) leftWorld = controller1.position;
+            if (s.handedness === 'right' && !rightWorld) rightWorld = controller2.position;
 
             if (s.gamepad && s.gamepad.buttons) {
               const trigger = s.gamepad.buttons[0] ? s.gamepad.buttons[0].value : 0.0;
               if (s.handedness === 'left') leftPinch = Math.max(leftPinch, trigger);
               if (s.handedness === 'right') rightPinch = Math.max(rightPinch, trigger);
-
-              // Grip or stick click clears water canvas
-              const grip = s.gamepad.buttons[1] && s.gamepad.buttons[1].pressed;
-              const stick = s.gamepad.buttons[3] && s.gamepad.buttons[3].pressed;
-              if (grip || stick) {
-                renderer.xr.enabled = false;
-                renderer.setRenderTarget(simRT1);
-                renderer.clearColor();
-                renderer.setRenderTarget(simRT2);
-                renderer.clearColor();
-                renderer.xr.enabled = true;
-              }
             }
           });
         }
 
-        // Map Left Hand Motion directly into View-Space Water Coordinates
-        if (leftPos) {
-          relPos.copy(leftPos).sub(camera.position).applyQuaternion(invCamRot);
-          const fwdDist = Math.max(Math.abs(relPos.z), 0.35);
-          const curNorm = new THREE.Vector2(relPos.x / fwdDist, relPos.y / fwdDist);
-          const vel = new THREE.Vector2().subVectors(curNorm, prevLeftNorm).divideScalar(dt + 0.001);
-          prevLeftNorm.copy(curNorm);
+        // Left Hand Projection
+        if (leftWorld) {
+          const curPolar = mapHandToPolar(leftWorld);
+          const vel = new THREE.Vector2().subVectors(curPolar, prevLeftPos).divideScalar(dt + 0.001);
+          prevLeftPos.copy(curPolar);
 
-          simUniforms.u_left_hand.value.copy(curNorm);
-          simUniforms.u_left_vel.value.copy(vel);
-          simUniforms.u_left_active.value = 1.0 + leftPinch * 2.0;
-          leftVal.textContent = leftPinch > 0.1 ? 'Pinching Shockwave' : 'Flowing';
+          uniforms.u_left_pos.value.copy(curPolar);
+          uniforms.u_left_vel.value.copy(vel);
+          uniforms.u_left_active.value = 1.0 + leftPinch * 2.2;
+          leftVal.textContent = leftPinch > 0.1 ? 'Pinching Shockwave' : 'Active Flow';
         } else {
-          simUniforms.u_left_active.value = 0.0;
+          uniforms.u_left_active.value = 0.0;
           leftVal.textContent = 'Idle';
         }
 
-        // Map Right Hand Motion directly into View-Space Water Coordinates
-        if (rightPos) {
-          relPos.copy(rightPos).sub(camera.position).applyQuaternion(invCamRot);
-          const fwdDist = Math.max(Math.abs(relPos.z), 0.35);
-          const curNorm = new THREE.Vector2(relPos.x / fwdDist, relPos.y / fwdDist);
-          const vel = new THREE.Vector2().subVectors(curNorm, prevRightNorm).divideScalar(dt + 0.001);
-          prevRightNorm.copy(curNorm);
+        // Right Hand Projection
+        if (rightWorld) {
+          const curPolar = mapHandToPolar(rightWorld);
+          const vel = new THREE.Vector2().subVectors(curPolar, prevRightPos).divideScalar(dt + 0.001);
+          prevRightPos.copy(curPolar);
 
-          simUniforms.u_right_hand.value.copy(curNorm);
-          simUniforms.u_right_vel.value.copy(vel);
-          simUniforms.u_right_active.value = 1.0 + rightPinch * 2.0;
-          rightVal.textContent = rightPinch > 0.1 ? 'Pinching Shockwave' : 'Flowing';
+          uniforms.u_right_pos.value.copy(curPolar);
+          uniforms.u_right_vel.value.copy(vel);
+          uniforms.u_right_active.value = 1.0 + rightPinch * 2.2;
+          rightVal.textContent = rightPinch > 0.1 ? 'Pinching Shockwave' : 'Active Flow';
         } else {
-          simUniforms.u_right_active.value = 0.0;
+          uniforms.u_right_active.value = 0.0;
           rightVal.textContent = 'Idle';
         }
       }
 
-      // =========================================================================
-      // PASS 1: GPGPU Simulation (XR override disabled to preserve 2D Ortho Quad)
-      // =========================================================================
-      renderer.xr.enabled = false;
-      simUniforms.u_prevBuffer.value = currentSimRead.texture;
-      renderer.setRenderTarget(currentSimWrite);
-      renderer.render(simScene, simCamera);
-
-      // Ping-pong buffer swap
-      const temp = currentSimRead;
-      currentSimRead = currentSimWrite;
-      currentSimWrite = temp;
-
-      // =========================================================================
-      // PASS 2: Main Sacred Chamber Dome (XR re-enabled before target null binding)
-      // =========================================================================
-      renderer.xr.enabled = true;
-      renderer.setRenderTarget(null); // Correctly binds the Quest WebXR compositor swapchain
-      displayUniforms.u_simTexture.value = currentSimRead.texture;
+      // Single, direct render pass straight to the WebXR compositor
       renderer.render(scene, camera);
     });
 
