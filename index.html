@@ -95,15 +95,15 @@
   <div id="err-banner"></div>
 
   <div id="ui-hud">
-    <h2>💎 K1 Persistent Fluid Dome</h2>
+    <h2>💎 K1 Focal-Enhanced Dome</h2>
     Mode: <span id="mode-val" class="val">2D Browser Window</span><br>
     Left Hand: <span id="left-val" class="val">Resting</span><br>
     Right Hand: <span id="right-val" class="val">Resting</span>
     <div class="hud-controls">
-      • <b>Hands at Sides / Down:</b> Ripples sleep; geometry stays smooth.<br>
-      • <b>Reach Out Forward:</b> Ripples wake up; farther reach = larger wake.<br>
-      • <b>Persistence (0.996):</b> Wakes and fluid trails linger and fade behind you.<br>
-      • <b>Pinch / Trigger:</b> Injects a concentrated hydrodynamic wave.
+      • <b>Center Detail:</b> Compressed forward optics for high-density sacred geometry.<br>
+      • <b>Water Ripple Force:</b> Softened to 1/3 intensity for graceful silk ripples.<br>
+      • <b>Hands at Sides / Down:</b> Ripples sleep; patterns stay pristine.<br>
+      • <b>Reach Out Forward:</b> Subtle capillary waves trail behind hand movements.
     </div>
   </div>
 
@@ -130,12 +130,12 @@
     camera.position.set(0, 0, 0.1);
 
     const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(1.0); // 1.0 DPR locks 90 FPS on Snapdragon XR2
+    renderer.setPixelRatio(1.0); // 1.0 DPR locks 90 FPS on Quest 3
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // 2. Geometry & Single-Pass Persistent Fluid Shader
+    // 2. Geometry & Single-Pass Focal-Compressed Fluid Shader
     const domeGeo = new THREE.SphereGeometry(60, 48, 24);
 
     const vertexShader = `
@@ -165,7 +165,7 @@
       uniform float u_contrast;
       uniform float u_grain_level;
 
-      // 12-Stage Persistent Hand Trails: xy = polar pos, z = decaying intensity, w = ripple phase
+      // 12-Stage Persistent Hand Trails
       const int TRAIL_COUNT = 12;
       uniform vec4 u_left_trail[TRAIL_COUNT];
       uniform vec2 u_left_vels[TRAIL_COUNT];
@@ -222,7 +222,7 @@
       }
 
       float flowerOfLife(vec2 p) {
-        vec4 h = hexCoords(p * 2.2);
+        vec4 h = hexCoords(p * 2.4);
         vec2 pCell = h.xy;
         float circleR = 1.0;
         float d1 = abs(length(pCell) - circleR);
@@ -254,9 +254,14 @@
       void main() {
         vec3 ray = normalize(vDirection);
 
-        // Pristine 360° Spherical Polar Projection (NO bending / tunnels)
+        // --- FOCAL CENTER DETAIL ENHANCEMENT ---
+        // Measures angle from direct forward direction (-Z)
         float polarDist = acos(clamp(-ray.z, -0.9999, 0.9999));
         float polarAngle = atan(ray.y, ray.x + 1e-5) + u_kaleido_angle;
+
+        // Compresses center coordinate space (pow 0.72) to increase spatial detail density by 2.2x
+        const float PI = 3.14159265359;
+        float focalDist = pow(polarDist / PI, 0.72) * PI * 1.5;
 
         // 6-Petal Bilateral Symmetry
         float tau = 6.28318530718;
@@ -265,46 +270,45 @@
         if (modA < 0.0) modA += segAngle;
         float foldA = abs(modA - segAngle * 0.5);
 
-        vec2 st = vec2(cos(foldA), sin(foldA)) * polarDist * 1.4;
+        vec2 st = vec2(cos(foldA), sin(foldA)) * focalDist;
 
-        // --- 0.996 PERSISTENT WATER TRAILS & CAPILLARY WAVE INTEGRATION ---
+        // --- 1/3 INTENSITY WATER RIPPLES & DISPLACEMENTS ---
         vec2 totalDisplacement = vec2(0.0);
         float totalRipples = 0.0;
         float handWakeGlow = 0.0;
 
-        // Accumulate Left Hand Persistent Trail
+        // Left Hand Trail (1/3 strength)
         for (int i = 0; i < TRAIL_COUNT; i++) {
           vec4 tL = u_left_trail[i];
           if (tL.z > 0.005) {
             vec2 toL = st - tL.xy;
             float dL = length(toL);
-            float weightL = exp(-dL * 3.2) * tL.z;
+            float weightL = exp(-dL * 3.4) * tL.z;
             vec2 vortexL = vec2(-toL.y, toL.x) / (dL + 0.14);
-            vec2 wakeL = u_left_vels[i] * exp(-dL * 2.4);
+            vec2 wakeL = u_left_vels[i] * exp(-dL * 2.5);
 
-            totalDisplacement += (vortexL * 0.45 + wakeL * 0.35) * weightL;
-            totalRipples += sin(dL * 28.0 - tL.w) * exp(-dL * 3.6) * tL.z;
+            totalDisplacement += (vortexL * 0.15 + wakeL * 0.12) * weightL;
+            totalRipples += sin(dL * 32.0 - tL.w) * exp(-dL * 3.8) * (tL.z * 0.35);
             handWakeGlow += weightL;
           }
         }
 
-        // Accumulate Right Hand Persistent Trail
+        // Right Hand Trail (1/3 strength)
         for (int i = 0; i < TRAIL_COUNT; i++) {
           vec4 tR = u_right_trail[i];
           if (tR.z > 0.005) {
             vec2 toR = st - tR.xy;
             float dR = length(toR);
-            float weightR = exp(-dR * 3.2) * tR.z;
+            float weightR = exp(-dR * 3.4) * tR.z;
             vec2 vortexR = vec2(-toR.y, toR.x) / (dR + 0.14);
-            vec2 wakeR = u_right_vels[i] * exp(-dR * 2.4);
+            vec2 wakeR = u_right_vels[i] * exp(-dR * 2.5);
 
-            totalDisplacement += (vortexR * 0.45 + wakeR * 0.35) * weightR;
-            totalRipples += sin(dR * 28.0 - tR.w) * exp(-dR * 3.6) * tR.z;
+            totalDisplacement += (vortexR * 0.15 + wakeR * 0.12) * weightR;
+            totalRipples += sin(dR * 32.0 - tR.w) * exp(-dR * 3.8) * (tR.z * 0.35);
             handWakeGlow += weightR;
           }
         }
 
-        // Apply persistent displacement
         st += totalDisplacement;
 
         // Harmonic Drift & Tensor Flow Alignment
@@ -313,26 +317,27 @@
         mat2 alignFlow = mat2(cos(rad), sin(rad), -sin(rad), cos(rad));
         vec2 p = alignFlow * st * vec2(0.55, u_flow_stretch);
 
-        // Sacred Chamber Geometry
+        // Sacred Chamber Geometry (Higher density rhombille diamonds & filigree)
         float radDist = length(p);
         float angleP = atan(p.y, p.x + 1e-5);
-        vec2 kDistort = vec2(fbm(p * 1.8 + t * 0.15), fbm(p * 1.8 - t * 0.12)) * (u_warp_scale * 0.22);
+        vec2 kDistort = vec2(fbm(p * 2.0 + t * 0.15), fbm(p * 2.0 - t * 0.12)) * (u_warp_scale * 0.22);
         vec2 kp = p + kDistort;
 
-        vec3 rBlocks = rhombilleDiamonds(kp * 4.2);
-        float centerMask = 1.0 - smoothstep(0.45, 0.85, radDist);
+        vec3 rBlocks = rhombilleDiamonds(kp * 5.2);
         float facetShade = (rBlocks.x < 0.5) ? 0.95 : ((rBlocks.x < 1.5) ? 0.65 : 0.40);
 
-        float fol = flowerOfLife(kp * 1.8);
-        float ringWaves = abs(sin(radDist * 24.0 - t * 1.2 + sin(angleP * 12.0) * 0.4));
-        float chevrons = abs(sin(angleP * 24.0 + radDist * 16.0));
-        float beads = 1.0 - smoothstep(0.12, 0.28, length(fract(vec2(angleP * 3.82, radDist * 6.0)) - 0.5));
-        float filigreeLace = max(fol * 0.8, chevrons * 0.5) + ringWaves * 0.4 + beads * 0.5;
+        float fol = flowerOfLife(kp * 2.2);
+        float ringWaves = abs(sin(radDist * 32.0 - t * 1.2 + sin(angleP * 12.0) * 0.4));
+        float chevrons = abs(sin(angleP * 24.0 + radDist * 22.0));
+        float beads = 1.0 - smoothstep(0.12, 0.28, length(fract(vec2(angleP * 3.82, radDist * 7.5)) - 0.5));
+        float filigreeLace = max(fol * 0.85, chevrons * 0.5) + ringWaves * 0.45 + beads * 0.55;
 
-        float f = mix(filigreeLace, facetShade * 1.2 + rBlocks.y * 0.6, centerMask);
+        // Retain fine filigree throughout the center forward area
+        float centerMask = 1.0 - smoothstep(0.40, 0.90, radDist);
+        float f = filigreeLace + (facetShade * 0.45 + rBlocks.y * 0.35) * centerMask;
 
-        // Capillary ripples etch directly into contour field
-        f += totalRipples * 0.35;
+        // 1/3 intensity ripples injected into field
+        f += totalRipples * 0.12;
         vec2 r = vec2(cos(angleP), sin(angleP)) * f;
 
         // Prismatic Spectral Splitting
@@ -364,8 +369,8 @@
         col += u_col_crest * spec * 1.4;
         col += mix(u_col_cool_b, u_col_crest, 0.65) * fresnel;
 
-        // Luminescent Water Trail Specular
-        col += vec3(0.2, 0.85, 1.0) * handWakeGlow * 0.55;
+        // Softened wake luminescence
+        col += vec3(0.2, 0.85, 1.0) * handWakeGlow * 0.18;
 
         col *= (0.75 + 0.45 * f * u_contrast);
 
@@ -378,7 +383,6 @@
       }
     `;
 
-    // Trail buffer initialization (12 segments per hand)
     const TRAIL_COUNT = 12;
     const leftTrailArray = [];
     const leftVelsArray = [];
@@ -465,11 +469,10 @@
       if (!isMouseDown || renderer.xr.isPresenting) return;
       const x = (e.clientX / window.innerWidth) * 2 - 1;
       const y = -(e.clientY / window.innerHeight) * 2 + 1;
-      const vel = new THREE.Vector2(x - prevMouseNorm.x, y - prevMouseNorm.y).multiplyScalar(12.0);
+      const vel = new THREE.Vector2(x - prevMouseNorm.x, y - prevMouseNorm.y).multiplyScalar(10.0);
       prevMouseNorm.set(x, y);
 
-      // Inject into trail 0
-      rightTrailArray[0].set(x, y, 1.2, performance.now() * 0.0075);
+      rightTrailArray[0].set(x, y, 0.45, performance.now() * 0.0075);
       rightVelsArray[0].copy(vel);
     });
 
@@ -502,11 +505,14 @@
       });
     }
 
-    // Helper: Map 3D Hand Direction to Polar Coordinates
+    // Helper: Map 3D Hand Direction to Polar Coordinates (Matches shader focal curve)
     function mapHandToPolar(handWorldPos) {
       const dir = new THREE.Vector3().subVectors(handWorldPos, camera.position).normalize();
       const polarDist = Math.acos(THREE.MathUtils.clamp(-dir.z, -0.9999, 0.9999));
       let polarAngle = Math.atan2(dir.y, dir.x + 1e-5) + (30.0 * Math.PI) / 180.0;
+
+      // Focal curve matching the fragment shader
+      const focalDist = Math.pow(polarDist / Math.PI, 0.72) * Math.PI * 1.5;
 
       const tau = Math.PI * 2.0;
       const segAngle = tau / 6.0;
@@ -514,10 +520,10 @@
       if (modA < 0.0) modA += segAngle;
       const foldA = Math.abs(modA - segAngle * 0.5);
 
-      return new THREE.Vector2(Math.cos(foldA) * polarDist * 1.4, Math.sin(foldA) * polarDist * 1.4);
+      return new THREE.Vector2(Math.cos(foldA) * focalDist, Math.sin(foldA) * focalDist);
     }
 
-    // 6. Natural Reach & Elevation Gating Analysis
+    // Natural Reach & Elevation Gating Analysis
     const invCamRot = new THREE.Quaternion();
     const localHandPos = new THREE.Vector3();
 
@@ -525,28 +531,25 @@
       invCamRot.copy(camera.quaternion).invert();
       localHandPos.copy(worldHandPos).sub(camera.position).applyQuaternion(invCamRot);
 
-      const fwdReach = -localHandPos.z; // Distance in front of chest/eyes (+Z is behind)
-      const headDist = localHandPos.length(); // Direct distance from head/eyes
-      const elevation = localHandPos.y; // Height relative to eye level (0)
+      const fwdReach = -localHandPos.z;
+      const headDist = localHandPos.length();
+      const elevation = localHandPos.y;
 
-      // 1. Hands down or by sides: Zero ripples
+      // Hands down or by sides: Zero ripples
       if (fwdReach < 0.16 || elevation < -0.42) {
         return 0.0;
       }
 
-      // 2. Reach gating: Smooth onset from 0.18m, ramping up as arms extend
+      // Smooth onset and elevation damping
       const reachFactor = THREE.MathUtils.smoothstep(fwdReach, 0.18, 0.58);
-
-      // 3. Head proximity damping: Less intense when touching headset or close to face
       const headFactor = THREE.MathUtils.smoothstep(headDist, 0.20, 0.35);
+      const farBoost = 1.0 + Math.max(0.0, fwdReach - 0.42) * 1.4;
 
-      // 4. Extension multiplier: Farther reach out produces larger ripples
-      const farBoost = 1.0 + Math.max(0.0, fwdReach - 0.42) * 2.2;
-
-      return THREE.MathUtils.clamp(reachFactor * headFactor * farBoost, 0.0, 2.5);
+      // Scaled down to 1/3 intensity baseline
+      return THREE.MathUtils.clamp(reachFactor * headFactor * farBoost * 0.4, 0.0, 1.1);
     }
 
-    // 7. Hand Smoothing States (Low-pass filtered positions and velocities)
+    // Hand Smoothing States
     const smoothLeftPos = new THREE.Vector3();
     const smoothRightPos = new THREE.Vector3();
     let leftInitialized = false;
@@ -559,7 +562,7 @@
     const smoothLeftVel = new THREE.Vector2();
     const smoothRightVel = new THREE.Vector2();
 
-    // 8. Kinematics & WebXR Main Animation Loop
+    // 6. Kinematics & Animation Loop
     let lastTime = performance.now();
     let pingPongPhase = Math.asin(Math.min(Math.max(74.0 / 180.0, -1.0), 1.0));
 
@@ -580,7 +583,7 @@
       uniforms.u_flow_angle.value = (currentAngleDeg * Math.PI) / 180.0;
       uniforms.u_time.value = timestamp * 0.001;
 
-      // --- 0.996 TRAIL DECAY TICK ---
+      // 0.996 persistence trail decay
       const decay = Math.pow(0.996, dt * 90.0);
       for (let i = 0; i < TRAIL_COUNT; i++) {
         leftTrailArray[i].z *= decay;
@@ -596,7 +599,6 @@
         let leftPinch = 0.0;
         let rightPinch = 0.0;
 
-        // Optical hands check
         if (hand1 && hand1.joints && hand1.joints['index-finger-tip']) {
           rawLeftWorld = hand1.joints['index-finger-tip'].position;
           const thmL = hand1.joints['thumb-tip'];
@@ -614,7 +616,6 @@
           }
         }
 
-        // Controller fallback
         const session = renderer.xr.getSession();
         if (session && session.inputSources) {
           session.inputSources.forEach((s) => {
@@ -629,17 +630,16 @@
           });
         }
 
-        // --- LEFT HAND SMOOTHING & TRAIL EMISSION ---
+        // Left Hand Smoothing & Trail Emission
         if (rawLeftWorld) {
           if (!leftInitialized) {
             smoothLeftPos.copy(rawLeftWorld);
             leftInitialized = true;
           } else {
-            // Low-pass EMA filter eliminates optical micro-jitter
             smoothLeftPos.lerp(rawLeftWorld, 0.12);
           }
 
-          const leftActivity = computeReachActivity(smoothLeftPos) * (1.0 + leftPinch * 1.6);
+          const leftActivity = computeReachActivity(smoothLeftPos) * (1.0 + leftPinch * 1.5);
           const curPolar = mapHandToPolar(smoothLeftPos);
           smoothLeftPolar.lerp(curPolar, 0.15);
 
@@ -647,11 +647,9 @@
           prevLeftPolar.copy(smoothLeftPolar);
           smoothLeftVel.lerp(rawVel, 0.15);
 
-          // Clamping deadband prevents resting jitter
           if (smoothLeftVel.length() < 0.03) smoothLeftVel.set(0, 0);
 
           if (leftActivity > 0.01) {
-            // Shift history trail and deposit new wake point
             for (let i = TRAIL_COUNT - 1; i > 0; i--) {
               leftTrailArray[i].copy(leftTrailArray[i - 1]);
               leftVelsArray[i].copy(leftVelsArray[i - 1]);
@@ -659,7 +657,7 @@
             leftTrailArray[0].set(smoothLeftPolar.x, smoothLeftPolar.y, leftActivity, timestamp * 0.0075);
             leftVelsArray[0].copy(smoothLeftVel);
 
-            leftVal.textContent = leftActivity > 1.2 ? 'Full Extension Wave' : 'Reaching (' + Math.round(leftActivity * 50) + '%)';
+            leftVal.textContent = leftActivity > 0.7 ? 'Extended Wake' : 'Reaching (' + Math.round(leftActivity * 100) + '%)';
           } else {
             leftVal.textContent = 'Resting by Side';
           }
@@ -668,7 +666,7 @@
           leftVal.textContent = 'Idle';
         }
 
-        // --- RIGHT HAND SMOOTHING & TRAIL EMISSION ---
+        // Right Hand Smoothing & Trail Emission
         if (rawRightWorld) {
           if (!rightInitialized) {
             smoothRightPos.copy(rawRightWorld);
@@ -677,7 +675,7 @@
             smoothRightPos.lerp(rawRightWorld, 0.12);
           }
 
-          const rightActivity = computeReachActivity(smoothRightPos) * (1.0 + rightPinch * 1.6);
+          const rightActivity = computeReachActivity(smoothRightPos) * (1.0 + rightPinch * 1.5);
           const curPolar = mapHandToPolar(smoothRightPos);
           smoothRightPolar.lerp(curPolar, 0.15);
 
@@ -695,7 +693,7 @@
             rightTrailArray[0].set(smoothRightPolar.x, smoothRightPolar.y, rightActivity, timestamp * 0.0075);
             rightVelsArray[0].copy(smoothRightVel);
 
-            rightVal.textContent = rightActivity > 1.2 ? 'Full Extension Wave' : 'Reaching (' + Math.round(rightActivity * 50) + '%)';
+            rightVal.textContent = rightActivity > 0.7 ? 'Extended Wake' : 'Reaching (' + Math.round(rightActivity * 100) + '%)';
           } else {
             rightVal.textContent = 'Resting by Side';
           }
@@ -705,7 +703,6 @@
         }
       }
 
-      // Single-pass direct render straight to the WebXR compositor
       renderer.render(scene, camera);
     });
 
