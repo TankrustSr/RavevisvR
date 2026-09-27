@@ -939,7 +939,8 @@
       const focalDist = Math.pow(polarDist / Math.PI, 0.72) * Math.PI * 1.5;
 
       const tau = Math.PI * 2.0;
-      const segAngle = tau / max(uniforms.u_kaleido_segs.value, 1.0);
+      // Fixed: explicitly call Math.max rather than the undeclared global max()
+      const segAngle = tau / Math.max(uniforms.u_kaleido_segs.value, 1.0);
       let modA = polarAngle % segAngle;
       if (modA < 0.0) modA += segAngle;
       const foldA = Math.abs(modA - segAngle * 0.5);
@@ -1056,7 +1057,6 @@
           const thmR = rightHand.joints['thumb-tip'];
           if (thmR) {
             const dist = rawRightWorld.distanceTo(thmR.position);
-            // Relaxed range: triggers reliably even with partial occlusion
             rightPinch = THREE.MathUtils.clamp(1.0 - (dist - 0.018) / 0.045, 0.0, 1.0);
           }
         } else if (rightController) {
@@ -1157,7 +1157,6 @@
         let isPointingAtMenu = false;
 
         if (menuMesh.visible && rawRightWorld) {
-          // Native Quest pointing ray: zero-deflection during pinch
           if (rightController) {
             rightController.getWorldPosition(rayOrigin);
             rightController.getWorldDirection(rayDir).negate();
@@ -1186,7 +1185,6 @@
             dotMesh.quaternion.copy(menuMesh.quaternion);
             dotMesh.visible = true;
 
-            // Reticle visually charges as right pinch builds up
             const dotScale = 1.0 + rightPinch * 1.8;
             dotMesh.scale.set(dotScale, dotScale, 1.0);
             dotMat.color.setRGB(rightPinch * 1.0, 1.0, 1.0 - rightPinch * 0.5);
@@ -1203,7 +1201,6 @@
               }
             }
 
-            // Sticky Hover logic: keeps target locked even if hand jitters for 200ms
             if (currentHitId) {
               hoveredButtonId = currentHitId;
               stickyHoverId = currentHitId;
@@ -1215,19 +1212,16 @@
               hoveredButtonId = null;
             }
 
-            // Magnetic selection latch
             if (rightPinch > 0.30 && !lockedButtonId && hoveredButtonId) {
               lockedButtonId = hoveredButtonId;
             }
 
             renderMenuCanvas();
 
-            // Calibrated trigger: executes at 0.58 pinch (100% reliable)
             if (rightPinch > 0.58 && !rightPinchLatched) {
               rightPinchLatched = true;
               const target = lockedButtonId || hoveredButtonId;
               if (target) {
-                // Haptic feedback pulse on selection
                 if (rightGamepad && rightGamepad.hapticActuators && rightGamepad.hapticActuators[0]) {
                   try { rightGamepad.hapticActuators[0].pulse(0.8, 60); } catch (e) {}
                 }
@@ -1285,7 +1279,6 @@
 
           if (smoothRightVel.length() < 0.03) smoothRightVel.set(0, 0);
 
-          // Shockwave fires exclusively in open space
           if (rightPinch > 0.70 && !rightPinchLatched && !isPointingAtMenu) {
             rightPinchLatched = true;
             uniforms.u_right_burst.value = 1.6;
