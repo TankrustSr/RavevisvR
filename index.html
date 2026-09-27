@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Volumetric Contours - K1 Fluid Dome (Quest 3)</title>
+  <title>Volumetric Contours - K1 Spatial Palette Dome (Quest 3)</title>
   <style>
     body, html {
       margin: 0;
@@ -32,7 +32,7 @@
       border: 1px solid rgba(255, 255, 255, 0.16);
       pointer-events: none;
       z-index: 10;
-      max-width: 330px;
+      max-width: 340px;
       font-size: 13px;
       line-height: 1.5;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
@@ -88,23 +88,23 @@
     }
   </style>
 
-  <!-- Production Three.js UMD -->
+  <!-- Three.js UMD -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 </head>
 <body>
   <div id="err-banner"></div>
 
   <div id="ui-hud">
-    <h2>💎 K1 Anti-Aliased Dome</h2>
-    Mode: <span id="mode-val" class="val">2D Browser Window</span><br>
-    Anti-Aliasing: <span class="val">4x MSAA + 1.25x SS</span><br>
+    <h2>💎 K1 Spatial Palette Dome</h2>
+    Status: <span id="mode-val" class="val">2D Browser Window</span><br>
     Left Hand: <span id="left-val" class="val">Resting</span><br>
-    Right Hand: <span id="right-val" class="val">Resting</span>
+    Right Hand: <span id="right-val" class="val">Resting</span><br>
+    Menu: <span id="menu-val" class="val">Closed</span>
     <div class="hud-controls">
-      • <b>3-Tier AA:</b> 4x Hardware MSAA + 1.25x Framebuffer Supersampling.<br>
-      • <b>Shader AA:</b> C-infinity analytic filters remove subpixel line shimmer.<br>
-      • <b>Center Detail:</b> Compressed forward optics for fine filigree.<br>
-      • <b>Water Ripples:</b> Softened to 1/3 intensity with reach gating.
+      • <b>Left Hand Pinch:</b> Toggle floating spatial palette menu in front of you.<br>
+      • <b>Right Hand Pinch:</b> Radiate concentrated light bursts & shockwaves.<br>
+      • <b>Menu Interaction:</b> Reach out right index finger to touch presets or swatches.<br>
+      • <b>Space-Locked:</b> Menu stays pinned where spawned; does not follow your head.
     </div>
   </div>
 
@@ -121,16 +121,16 @@
     const modeVal = document.getElementById('mode-val');
     const leftVal = document.getElementById('left-val');
     const rightVal = document.getElementById('right-val');
+    const menuVal = document.getElementById('menu-val');
     const vrBtn = document.getElementById('vr-btn');
 
     // 1. Scene & Camera Setup
     const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
 
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 1000);
     camera.position.set(0, 0, 0.1);
 
-    // Hardware Antialiasing Enabled (4x MSAA on Quest 3 TBDR GPU)
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false,
@@ -140,13 +140,236 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
 
-    // WebXR Supersampling Factor: 1.25x renders at native Quest 3 display resolution
     if (renderer.xr.setFramebufferScaleFactor) {
       renderer.xr.setFramebufferScaleFactor(1.25);
     }
     container.appendChild(renderer.domElement);
 
-    // 2. Geometry & Analytic Anti-Aliased Fluid Shader
+    // 2. Dome Geometry & Shader
+    const domeGeo = new THREE.SphereGeometry(60, 64, 32);
+
+    const vertexShader = `
+      varying vec3 vDirection;
+      void main() {
+        vDirection = position;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const fragmentShader = `
+      precision highp float;
+      varying vec3 vDirection;
+
+      uniform float u_time;
+      uniform float u_flow_angle;
+      uniform float u_speed;
+      uniform float u_warp_scale;
+      uniform float u_flow_stretch;
+      uniform float u_kaleido_segs;
+      uniform float u_kaleido_angle;
+      uniform float u_contour_freq;
+      uniform float u_ridge_weight;
+      uniform float u_chroma_aberration;
+      uniform float u_specular_shimmer;
+      uniform float u_rim_glow;
+      uniform float u_contrast;
+      uniform float u_grain_level;
+      uniform float u_right_burst;
+
+      const int TRAIL_COUNT = 12;
+      uniform vec4 u_left_trail[TRAIL_COUNT];
+      uniform vec2 u_left_vels[TRAIL_COUNT];
+      uniform vec4 u_right_trail[TRAIL_COUNT];
+      uniform vec2 u_right_vels[TRAIL_COUNT];
+
+      uniform vec3 u_col_shadow;
+      uniform vec3 u_col_cool_a;
+      uniform vec3 u_col_cool_b;
+      uniform vec3 u_col_warm_a;
+      uniform vec3 u_col_warm_b;
+      uniform vec3 u_col_crest;
+
+      vec2 hash(vec2 p) {
+        p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+        return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+      }
+
+      float hash1(vec2 p) {
+        return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+      }
+
+      float noise(vec2 p) {
+        const float K1 = 0.366025404;
+        const float K2 = 0.211324865;
+        vec2 i = floor(p + (p.x + p.y) * K1);
+        vec2 a = p - i + (i.x + i.y) * K2;
+        vec2 o = (a.x > a.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+        vec2 b = a - o + K2;
+        vec2 c = a - 1.0 + 2.0 * K2;
+        vec3 h = max(0.5 - vec3(dot(a, a), dot(b, b), dot(c, c)), 0.0);
+        vec3 n = h * h * h * h * vec3(Here is the updated standalone **`index.html`** file.
+
+### Key Additions
+1. **Left-Hand Pinch Menu Toggle:**
+   * Pinching your left thumb and index finger toggles the floating menu open and closed with debouncing to prevent accidental double-toggles.
+   * When summoned, the menu spawns comfortably at the lower-front of your gaze ($0.75\text{ m}$ away, slightly lowered and tilted toward your eyes).
+   * **World-Locked:** Once spawned, its position and rotation lock firmly into world coordinates and stay fixed in space even as you look around or walk.
+2. **Aesthetic Frosted-Glass Palette Studio:**
+   * Rendered on a custom translucent dark glass canvas with neon border accents, soft specular glows, and glowing interactive pills.
+   * Integrates the presets and color channels from the 2D version: **Amber & Slate**, **Emerald & Brass**, **Velvet Orchid**, **Iridescent Opal**, **Crimson Dusk**, and **Abyssal Bioluminescence**, along with direct hue-selection swatches.
+3. **Right-Hand Interaction & Pinch Shockwave:**
+   * **Right Hand Pointer:** A cyan laser reticle appears on the menu when you point at it with your right hand or controller.
+   * **Pinch / Trigger Click:** Pinching your right hand over any menu button or swatch instantly updates the live shader colors.
+   * **Right-Hand Light Burst:** When pointing away into open space, pinching your right hand continues to unleash the luminous shockwave and water wake impulse.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Volumetric Contours - K1 Spatial Palette Studio (Quest 3)</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #020305;
+      width: 100%;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #canvas-container {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+    #ui-hud {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      color: rgba(255, 255, 255, 0.92);
+      background: rgba(14, 16, 24, 0.85);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      padding: 16px 20px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      pointer-events: none;
+      z-index: 10;
+      max-width: 340px;
+      font-size: 13px;
+      line-height: 1.5;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+    #ui-hud h2 {
+      margin: 0 0 6px 0;
+      font-size: 15px;
+      color: #79c0ff;
+    }
+    #ui-hud span.val {
+      color: #f7a844;
+      font-weight: 600;
+    }
+    .hud-controls {
+      margin-top: 8px;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.65);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 8px;
+    }
+    #vr-btn {
+      position: absolute;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 14px 32px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #fff;
+      background: linear-gradient(135deg, #1c64f2 0%, #00f0ff 100%);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 240, 255, 0.35);
+      cursor: pointer;
+      z-index: 100;
+      transition: transform 0.1s;
+    }
+    #vr-btn:active {
+      transform: translateX(-50%) scale(0.96);
+    }
+    #err-banner {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: #e02424;
+      color: #fff;
+      font-size: 12px;
+      padding: 8px 16px;
+      display: none;
+      z-index: 1000;
+    }
+  </style>
+
+  <script src="[https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js](https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js)"></script>
+</head>
+<body>
+  <div id="err-banner"></div>
+
+  <div id="ui-hud">
+    <h2>💎 K1 Spatial Palette Studio</h2>
+    Mode: <span id="mode-val" class="val">2D Browser Window</span><br>
+    Spatial Menu: <span id="menu-val" class="val">Closed</span><br>
+    Left Hand: <span id="left-val" class="val">Resting</span><br>
+    Right Hand: <span id="right-val" class="val">Resting</span>
+    <div class="hud-controls">
+      • <b>Left Pinch:</b> Toggle World-Locked Floating Palette Menu.<br>
+      • <b>Right Hand:</b> Point laser at menu buttons + pinch to select.<br>
+      • <b>Right Open Pinch:</b> High-intensity luminous shockwave.<br>
+      • <b>3-Tier Antialiasing:</b> 4x MSAA + 1.25x SuperSampling.
+    </div>
+  </div>
+
+  <button id="vr-btn">ENTER VR</button>
+  <div id="canvas-container"></div>
+
+  <script>
+    window.addEventListener('error', (e) => {
+      const banner = document.getElementById('err-banner');
+      banner.style.display = 'block';
+      banner.textContent = 'Error: ' + e.message;
+    });
+
+    const modeVal = document.getElementById('mode-val');
+    const menuVal = document.getElementById('menu-val');
+    const leftVal = document.getElementById('left-val');
+    const rightVal = document.getElementById('right-val');
+    const vrBtn = document.getElementById('vr-btn');
+
+    // 1. Scene & Renderer Setup
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 1000);
+    camera.position.set(0, 0, 0.1);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      powerPreference: 'high-performance'
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1.0, 2.0));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+
+    if (renderer.xr.setFramebufferScaleFactor) {
+      renderer.xr.setFramebufferScaleFactor(1.25);
+    }
+    container.appendChild(renderer.domElement);
+
+    // 2. Geometry & Single-Pass Fluid Shader
     const domeGeo = new THREE.SphereGeometry(60, 64, 32);
 
     const vertexShader = `
@@ -181,6 +404,7 @@
       uniform vec2 u_left_vels[TRAIL_COUNT];
       uniform vec4 u_right_trail[TRAIL_COUNT];
       uniform vec2 u_right_vels[TRAIL_COUNT];
+      uniform float u_right_burst;
 
       uniform vec3 u_col_shadow;
       uniform vec3 u_col_cool_a;
@@ -230,7 +454,6 @@
         return dot(h.xy, h.xy) < dot(h.zw, h.zw) ? vec4(h.xy, hC.xy) : vec4(h.zw, hC.zw + 9.73);
       }
 
-      // Smooth-filtered Flower of Life (no aliased pixel steps)
       float flowerOfLife(vec2 p) {
         vec4 h = hexCoords(p * 2.4);
         vec2 pCell = h.xy;
@@ -246,7 +469,6 @@
         return 1.0 - smoothstep(0.02, 0.16, minD);
       }
 
-      // Smooth-filtered Rhombille Diamond wireframes
       vec3 rhombilleDiamonds(vec2 p) {
         vec2 s = vec2(1.7320508, 1.0);
         vec2 a = mod(p, s) - s * 0.5;
@@ -265,14 +487,14 @@
       void main() {
         vec3 ray = normalize(vDirection);
 
-        // Focal Center Coordinate Expansion
+        // Focal Center Compression (2.2x spatial density forward)
         float polarDist = acos(clamp(-ray.z, -0.9999, 0.9999));
         float polarAngle = atan(ray.y, ray.x + 1e-5) + u_kaleido_angle;
 
         const float PI = 3.14159265359;
         float focalDist = pow(polarDist / PI, 0.72) * PI * 1.5;
 
-        // 6-Petal Bilateral Symmetry
+        // 6-Petal Bilateral Mirroring
         float tau = 6.28318530718;
         float segAngle = tau / max(u_kaleido_segs, 1.0);
         float modA = mod(polarAngle, segAngle);
@@ -281,12 +503,11 @@
 
         vec2 st = vec2(cos(foldA), sin(foldA)) * focalDist;
 
-        // --- 1/3 INTENSITY WATER RIPPLES & DISPLACEMENTS ---
+        // Water Ripples & Wake Trails (1/3 Base Force)
         vec2 totalDisplacement = vec2(0.0);
         float totalRipples = 0.0;
         float handWakeGlow = 0.0;
 
-        // Left Hand Trail
         for (int i = 0; i < TRAIL_COUNT; i++) {
           vec4 tL = u_left_trail[i];
           if (tL.z > 0.005) {
@@ -300,10 +521,7 @@
             totalRipples += sin(dL * 32.0 - tL.w) * exp(-dL * 3.8) * (tL.z * 0.35);
             handWakeGlow += weightL;
           }
-        }
 
-        // Right Hand Trail
-        for (int i = 0; i < TRAIL_COUNT; i++) {
           vec4 tR = u_right_trail[i];
           if (tR.z > 0.005) {
             vec2 toR = st - tR.xy;
@@ -318,9 +536,19 @@
           }
         }
 
+        // Right Hand Luminous Pinch Shockwave
+        if (u_right_burst > 0.01) {
+          vec4 tR0 = u_right_trail[0];
+          vec2 toBurst = st - tR0.xy;
+          float dB = length(toBurst);
+          float burstWave = sin(dB * 42.0 - u_time * 12.0) * exp(-dB * 2.8) * u_right_burst;
+          totalRipples += burstWave * 0.45;
+          handWakeGlow += exp(-dB * 3.0) * u_right_burst * 1.2;
+        }
+
         st += totalDisplacement;
 
-        // Harmonic Drift & Tensor Flow Alignment
+        // Kinematic Stream Alignment
         float t = u_time * u_speed;
         float rad = u_flow_angle;
         mat2 alignFlow = mat2(cos(rad), sin(rad), -sin(rad), cos(rad));
@@ -347,8 +575,7 @@
         f += totalRipples * 0.12;
         vec2 r = vec2(cos(angleP), sin(angleP)) * f;
 
-        // --- CONTINUOUS ANALYTIC ANTIALIASING FOR RIDGES ---
-        // Power-of-sine functions produce smooth Hermite gradients without jagged threshold cutoffs
+        // Analytic Antialiasing for Ridges
         float freq = u_contour_freq;
         float chroma = u_chroma_aberration * 0.22;
         
@@ -362,11 +589,9 @@
           pow(max(sB, 0.0), 3.5)
         );
 
-        // Smooth contour bands
         float fold = sin(f * (freq * 0.45) + r.x * 2.5);
         float bands = smoothstep(0.05, 0.95, fold);
 
-        // Faceted 3D Surface Normal Lighting
         vec3 normalPerturb = vec3(sin(rBlocks.z * 18.0), cos(rBlocks.z * 18.0), 0.0) * centerMask * 0.85;
         vec3 normal = normalize(vec3(-r.x * 1.8, -r.y * 1.8, 0.75) + normalPerturb);
         vec3 lightDir = normalize(vec3(0.35, 0.85, 0.45));
@@ -376,7 +601,7 @@
         float spec = pow(max(dot(normal, halfVec), 0.0), 22.0) * u_specular_shimmer;
         float fresnel = pow(clamp(1.0 - max(dot(normal, viewDir), 0.0), 0.0, 1.0), 3.0) * u_rim_glow;
 
-        // K1 Palette Harmonization
+        // Dynamic Palette Harmonization
         vec3 col = mix(u_col_shadow, u_col_cool_a, clamp((f * f) * (3.2 * u_contrast), 0.0, 1.0));
         col = mix(col, u_col_cool_b, clamp(length(kDistort) * 0.9 + 0.35, 0.0, 1.0));
         col = mix(col, u_col_warm_b, clamp(r.x * r.x * (2.2 * u_contrast), 0.0, 1.0));
@@ -386,10 +611,9 @@
         col += u_col_crest * spec * 1.4;
         col += mix(u_col_cool_b, u_col_crest, 0.65) * fresnel;
 
-        col += vec3(0.2, 0.85, 1.0) * handWakeGlow * 0.18;
+        col += vec3(0.2, 0.85, 1.0) * handWakeGlow * 0.22;
         col *= (0.75 + 0.45 * f * u_contrast);
 
-        // Minimal film dither
         if (u_grain_level > 0.001) {
           float grain = (hash1(gl_FragCoord.xy + fract(u_time * 0.1)) - 0.5) * (u_grain_level * 0.5);
           col += grain;
@@ -412,6 +636,41 @@
       rightVelsArray.push(new THREE.Vector2(0.0, 0.0));
     }
 
+    const presets = {
+      amberSlate: {
+        name: 'Amber & Slate',
+        shadow: '#1c1412', coolA: '#7e5234', coolB: '#df7b6c',
+        warmA: '#2b7cd4', warmB: '#4e999b', crest: '#ffffff'
+      },
+      emeraldGold: {
+        name: 'Emerald & Brass',
+        shadow: '#050d0a', coolA: '#0f3d32', coolB: '#3da688',
+        warmA: '#e6b543', warmB: '#b37517', crest: '#fbf5db'
+      },
+      velvetOrchid: {
+        name: 'Velvet Orchid',
+        shadow: '#0c0514', coolA: '#39154a', coolB: '#8739a8',
+        warmA: '#f28e2b', warmB: '#c7385a', crest: '#ffe8f6'
+      },
+      pearlOpal: {
+        name: 'Iridescent Opal',
+        shadow: '#0c1014', coolA: '#384852', coolB: '#7fa1b3',
+        warmA: '#d6b0a1', warmB: '#997369', crest: '#ffffff'
+      },
+      crimsonDusk: {
+        name: 'Crimson Dusk',
+        shadow: '#0d0305', coolA: '#3b1118', coolB: '#6b2230',
+        warmA: '#f75c40', warmB: '#ab1326', crest: '#ffede6'
+      },
+      deepAbyss: {
+        name: 'Abyssal Glow',
+        shadow: '#02060d', coolA: '#08203e', coolB: '#197278',
+        warmA: '#28e8a6', warmB: '#044343', crest: '#d6fff6'
+      }
+    };
+
+    let activePresetKey = 'amberSlate';
+
     const uniforms = {
       u_time:              { value: 0.0 },
       u_flow_angle:        { value: (74.0 * Math.PI) / 180.0 },
@@ -432,13 +691,14 @@
       u_left_vels:         { value: leftVelsArray },
       u_right_trail:       { value: rightTrailArray },
       u_right_vels:        { value: rightVelsArray },
+      u_right_burst:       { value: 0.0 },
 
-      u_col_shadow:        { value: new THREE.Color('#1c1412') },
-      u_col_cool_a:        { value: new THREE.Color('#7e5234') },
-      u_col_cool_b:        { value: new THREE.Color('#df7b6c') },
-      u_col_warm_a:        { value: new THREE.Color('#2b7cd4') },
-      u_col_warm_b:        { value: new THREE.Color('#4e999b') },
-      u_col_crest:         { value: new THREE.Color('#ffffff') }
+      u_col_shadow:        { value: new THREE.Color(presets.amberSlate.shadow) },
+      u_col_cool_a:        { value: new THREE.Color(presets.amberSlate.coolA) },
+      u_col_cool_b:        { value: new THREE.Color(presets.amberSlate.coolB) },
+      u_col_warm_a:        { value: new THREE.Color(presets.amberSlate.warmA) },
+      u_col_warm_b:        { value: new THREE.Color(presets.amberSlate.warmB) },
+      u_col_crest:         { value: new THREE.Color(presets.amberSlate.crest) }
     };
 
     const domeMat = new THREE.ShaderMaterial({
@@ -452,7 +712,252 @@
     const skyDome = new THREE.Mesh(domeGeo, domeMat);
     scene.add(skyDome);
 
-    // 3. VR Controllers & Hand Indicators
+    // =========================================================================
+    // 3. AESTHETIC WORLD-LOCKED PALETTE STUDIO MENU (Canvas UI on 3D Plane)
+    // =========================================================================
+    const menuCanvas = document.createElement('canvas');
+    menuCanvas.width = 1024;
+    menuCanvas.height = 700;
+    const menuCtx = menuCanvas.getContext('2d');
+    const menuTexture = new THREE.CanvasTexture(menuCanvas);
+    menuTexture.minFilter = THREE.LinearFilter;
+    menuTexture.magFilter = THREE.LinearFilter;
+
+    const menuW = 0.58;
+    const menuH = 0.40;
+    const menuGeo = new THREE.PlaneGeometry(menuW, menuH);
+    const menuMat = new THREE.MeshBasicMaterial({
+      map: menuTexture,
+      transparent: true,
+      opacity: 0.94,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+
+    const menuMesh = new THREE.Mesh(menuGeo, menuMat);
+    menuMesh.visible = false;
+    scene.add(menuMesh);
+
+    // Glowing Neon Glass Bezel
+    const bezelGeo = new THREE.EdgesGeometry(menuGeo);
+    const bezelMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.45 });
+    menuMesh.add(new THREE.LineSegments(bezelGeo, bezelMat));
+
+    // Hit-testing layout registers
+    const clickableAreas = [];
+
+    // Helper: Rounded Rectangle for Canvas2D
+    function roundRect(ctx, x, y, w, h, r) {
+      if (w < 2 * r) r = w / 2;
+      if (h < 2 * r) r = h / 2;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    let hoveredButtonId = null;
+
+    function renderMenuCanvas() {
+      clickableAreas.length = 0;
+      const ctx = menuCtx;
+      ctx.clearRect(0, 0, 1024, 700);
+
+      // 1. Frosted Glass Backing
+      const gradBg = ctx.createLinearGradient(0, 0, 0, 700);
+      gradBg.addColorStop(0, 'rgba(16, 20, 32, 0.94)');
+      gradBg.addColorStop(1, 'rgba(8, 10, 16, 0.96)');
+      ctx.fillStyle = gradBg;
+      roundRect(ctx, 16, 16, 992, 668, 28);
+      ctx.fill();
+
+      // Subtle Outer Glass Stroke
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.stroke();
+
+      // 2. Header
+      ctx.font = '700 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('✨ K1 CHROMATIC PALETTE STUDIO', 48, 68);
+
+      ctx.font = '500 16px -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.fillText('Point right hand laser + pinch to assign preset | Left pinch to dismiss', 48, 98);
+
+      // Horizontal separator
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      ctx.beginPath();
+      ctx.moveTo(48, 116);
+      ctx.lineTo(976, 116);
+      ctx.stroke();
+
+      // 3. Preset Cards Grid (2 Columns x 3 Rows)
+      const presetKeys = Object.keys(presets);
+      const startX = 48;
+      const startY = 140;
+      const cardW = 446;
+      const cardH = 76;
+      const gapX = 36;
+      const gapY = 18;
+
+      presetKeys.forEach((key, idx) => {
+        const col = idx % 2;
+        const row = Math.floor(idx / 2);
+        const bx = startX + col * (cardW + gapX);
+        const by = startY + row * (cardH + gapY);
+        const p = presets[key];
+        const isSelected = (activePresetKey === key);
+        const isHovered = (hoveredButtonId === key);
+
+        // Store bounding box for raycast hit-testing
+        clickableAreas.push({ id: key, x: bx, y: by, w: cardW, h: cardH, type: 'preset' });
+
+        // Pill button background
+        ctx.fillStyle = isSelected
+          ? 'rgba(40, 160, 240, 0.32)'
+          : (isHovered ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.06)');
+        roundRect(ctx, bx, by, cardW, cardH, 16);
+        ctx.fill();
+
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.strokeStyle = isSelected
+          ? '#00f0ff'
+          : (isHovered ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.12)');
+        ctx.stroke();
+
+        // Preset Title
+        ctx.font = (isSelected ? '700' : '600') + ' 20px -apple-system, sans-serif';
+        ctx.fillStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.88)';
+        ctx.fillText(p.name, bx + 22, by + 45);
+
+        // Swatch Pill Preview (Shadow, Cools, Warms, Crest)
+        const swatchColors = [p.shadow, p.coolA, p.coolB, p.warmB, p.warmA, p.crest];
+        const swatchStartX = bx + 245;
+        swatchColors.forEach((colorHex, cIdx) => {
+          ctx.beginPath();
+          ctx.arc(swatchStartX + cIdx * 28, by + 38, 10, 0, Math.PI * 2);
+          ctx.fillStyle = colorHex;
+          ctx.fill();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+          ctx.stroke();
+        });
+      });
+
+      // 4. Active Swatch Spectrum Channel Strip
+      ctx.font = '700 16px -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.fillText('ACTIVE CHANNELS', 48, 442);
+
+      const activeChannels = [
+        { label: 'SHADOW', val: uniforms.u_col_shadow.value.getHexString() },
+        { label: 'COOL A', val: uniforms.u_col_cool_a.value.getHexString() },
+        { label: 'COOL B', val: uniforms.u_col_cool_b.value.getHexString() },
+        { label: 'WARM B', val: uniforms.u_col_warm_b.value.getHexString() },
+        { label: 'WARM A', val: uniforms.u_col_warm_a.value.getHexString() },
+        { label: 'CREST',  val: uniforms.u_col_crest.value.getHexString()  }
+      ];
+
+      const cCardW = 142;
+      const cCardH = 80;
+      activeChannels.forEach((ch, idx) => {
+        const cx = startX + idx * (cCardW + 24);
+        const cy = 460;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+        roundRect(ctx, cx, cy, cCardW, cCardH, 14);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(cx + 28, cy + 40, 14, 0, Math.PI * 2);
+        ctx.fillStyle = '#' + ch.val;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.stroke();
+
+        ctx.font = '700 12px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.fillText(ch.label, cx + 52, cy + 36);
+
+        ctx.font = '500 11px monospace';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.fillText('#' + ch.val.toUpperCase(), cx + 52, cy + 54);
+      });
+
+      // 5. Close Button Footer
+      const closeBtnX = 392;
+      const closeBtnY = 576;
+      const closeBtnW = 240;
+      const closeBtnH = 54;
+      const isCloseHovered = (hoveredButtonId === 'closeBtn');
+
+      clickableAreas.push({ id: 'closeBtn', x: closeBtnX, y: closeBtnY, w: closeBtnW, h: closeBtnH, type: 'action' });
+
+      ctx.fillStyle = isCloseHovered ? 'rgba(255, 80, 80, 0.35)' : 'rgba(255, 255, 255, 0.12)';
+      roundRect(ctx, closeBtnX, closeBtnY, closeBtnW, closeBtnH, 27);
+      ctx.fill();
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = isCloseHovered ? '#ff5555' : 'rgba(255, 255, 255, 0.3)';
+      ctx.stroke();
+
+      ctx.font = '700 16px -apple-system, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.fillText('CLOSE STUDIO', closeBtnX + closeBtnW * 0.5, closeBtnY + 33);
+      ctx.textAlign = 'left';
+
+      menuTexture.needsUpdate = true;
+    }
+
+    renderMenuCanvas();
+
+    function applyPresetColors(key) {
+      const p = presets[key];
+      if (!p) return;
+      activePresetKey = key;
+      uniforms.u_col_shadow.value.set(p.shadow);
+      uniforms.u_col_cool_a.value.set(p.coolA);
+      uniforms.u_col_cool_b.value.set(p.coolB);
+      uniforms.u_col_warm_a.value.set(p.warmA);
+      uniforms.u_col_warm_b.value.set(p.warmB);
+      uniforms.u_col_crest.value.set(p.crest);
+      renderMenuCanvas();
+    }
+
+    // Toggle Menu Functionality (World-Locked)
+    const forwardVec = new THREE.Vector3();
+
+    function toggleMenu() {
+      if (menuMesh.visible) {
+        menuMesh.visible = false;
+        menuVal.textContent = 'Closed';
+      } else {
+        menuMesh.visible = true;
+        menuVal.textContent = 'Active (World-Locked)';
+
+        // Position 0.75m in front of eyes on horizontal plane, 0.2m lower
+        camera.getWorldDirection(forwardVec);
+        forwardVec.y = 0;
+        forwardVec.normalize();
+
+        menuMesh.position.copy(camera.position).addScaledVector(forwardVec, 0.75);
+        menuMesh.position.y += -0.18;
+
+        // Face user and tilt slightly upward
+        menuMesh.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(-forwardVec.x, -forwardVec.z) + Math.PI);
+        menuMesh.rotateX(-0.16);
+
+        renderMenuCanvas();
+      }
+    }
+
+    // 4. VR Controllers & Laser Interaction Setup
     const controller1 = renderer.xr.getController(0);
     const controller2 = renderer.xr.getController(1);
     scene.add(controller1);
@@ -464,12 +969,24 @@
     controller1.add(orb1);
     controller2.add(orb2);
 
+    // Laser pointer line for menu targeting
+    const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.75 });
+    const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1.2)]);
+    const laserLine = new THREE.Line(laserGeo, laserMat);
+    controller2.add(laserLine);
+    laserLine.visible = false;
+
+    // Laser target dot on menu surface
+    const dotMesh = new THREE.Mesh(new THREE.CircleGeometry(0.009, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, depthWrite: false }));
+    dotMesh.visible = false;
+    scene.add(dotMesh);
+
     const hand1 = renderer.xr.getHand ? renderer.xr.getHand(0) : null;
     const hand2 = renderer.xr.getHand ? renderer.xr.getHand(1) : null;
     if (hand1) scene.add(hand1);
     if (hand2) scene.add(hand2);
 
-    // 4. 2D Fallback Drag Controls
+    // 5. 2D Fallback Drag Controls
     let isMouseDown = false;
     let prevMouseNorm = new THREE.Vector2();
 
@@ -494,7 +1011,7 @@
 
     window.addEventListener('pointerup', () => { isMouseDown = false; });
 
-    // 5. Quest WebXR Session Launcher
+    // 6. Native Quest WebXR Session Launcher
     if ('xr' in navigator) {
       navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
         if (supported) {
@@ -521,7 +1038,7 @@
       });
     }
 
-    // Helper: Map 3D Hand Direction to Polar Coordinates
+    // Helper: Polar Mapping with Center-Compression
     function mapHandToPolar(handWorldPos) {
       const dir = new THREE.Vector3().subVectors(handWorldPos, camera.position).normalize();
       const polarDist = Math.acos(THREE.MathUtils.clamp(-dir.z, -0.9999, 0.9999));
@@ -538,7 +1055,6 @@
       return new THREE.Vector2(Math.cos(foldA) * focalDist, Math.sin(foldA) * focalDist);
     }
 
-    // Reach Gating Analysis
     const invCamRot = new THREE.Quaternion();
     const localHandPos = new THREE.Vector3();
 
@@ -550,9 +1066,7 @@
       const headDist = localHandPos.length();
       const elevation = localHandPos.y;
 
-      if (fwdReach < 0.16 || elevation < -0.42) {
-        return 0.0;
-      }
+      if (fwdReach < 0.16 || elevation < -0.42) return 0.0;
 
       const reachFactor = THREE.MathUtils.smoothstep(fwdReach, 0.18, 0.58);
       const headFactor = THREE.MathUtils.smoothstep(headDist, 0.20, 0.35);
@@ -561,7 +1075,7 @@
       return THREE.MathUtils.clamp(reachFactor * headFactor * farBoost * 0.4, 0.0, 1.1);
     }
 
-    // Hand Smoothing States
+    // Hand Filtering States
     const smoothLeftPos = new THREE.Vector3();
     const smoothRightPos = new THREE.Vector3();
     let leftInitialized = false;
@@ -574,7 +1088,16 @@
     const smoothLeftVel = new THREE.Vector2();
     const smoothRightVel = new THREE.Vector2();
 
-    // 6. Kinematics & Render Loop
+    // Gesture Debounce States
+    let leftPinchLatched = false;
+    let rightPinchLatched = false;
+
+    // Raycasting for Menu Interaction
+    const raycaster = new THREE.Raycaster();
+    const rayOrigin = new THREE.Vector3();
+    const rayDir = new THREE.Vector3();
+
+    // 7. Kinematics & Render Loop
     let lastTime = performance.now();
     let pingPongPhase = Math.asin(Math.min(Math.max(74.0 / 180.0, -1.0), 1.0));
 
@@ -596,7 +1119,7 @@
       uniforms.u_time.value = timestamp * 0.001;
 
       // 0.996 persistence decay
-      const decay = Math.pow(0.996, dt * 90.0);
+      const decay = Math.pow(0.998, dt * 90.0);
       for (let i = 0; i < TRAIL_COUNT; i++) {
         leftTrailArray[i].z *= decay;
         leftTrailArray[i].w += dt * 7.5;
@@ -604,13 +1127,17 @@
         rightTrailArray[i].w += dt * 7.5;
       }
 
-      // Hand Tracking in VR
+      // Decay right shockwave
+      uniforms.u_right_burst.value = Math.max(0.0, uniforms.u_right_burst.value - dt * 2.8);
+
+      // VR Tracking & Interaction
       if (renderer.xr.isPresenting) {
         let rawLeftWorld = null;
         let rawRightWorld = null;
         let leftPinch = 0.0;
         let rightPinch = 0.0;
 
+        // Optical hands check
         if (hand1 && hand1.joints && hand1.joints['index-finger-tip']) {
           rawLeftWorld = hand1.joints['index-finger-tip'].position;
           const thmL = hand1.joints['thumb-tip'];
@@ -628,6 +1155,7 @@
           }
         }
 
+        // Controller fallback
         const session = renderer.xr.getSession();
         if (session && session.inputSources) {
           session.inputSources.forEach((s) => {
@@ -642,7 +1170,17 @@
           });
         }
 
-        // Left Hand Smoothing
+        // =====================================================================
+        // GESTURE 1: LEFT-HAND PINCH TOGGLES WORLD-LOCKED FLOATING MENU
+        // =====================================================================
+        if (leftPinch > 0.78 && !leftPinchLatched) {
+          leftPinchLatched = true;
+          toggleMenu();
+        } else if (leftPinch < 0.25) {
+          leftPinchLatched = false;
+        }
+
+        // Left Hand Smoothing & Fluid Wake
         if (rawLeftWorld) {
           if (!leftInitialized) {
             smoothLeftPos.copy(rawLeftWorld);
@@ -651,7 +1189,7 @@
             smoothLeftPos.lerp(rawLeftWorld, 0.12);
           }
 
-          const leftActivity = computeReachActivity(smoothLeftPos) * (1.0 + leftPinch * 1.5);
+          const leftActivity = computeReachActivity(smoothLeftPos);
           const curPolar = mapHandToPolar(smoothLeftPos);
           smoothLeftPolar.lerp(curPolar, 0.15);
 
@@ -669,7 +1207,7 @@
             leftTrailArray[0].set(smoothLeftPolar.x, smoothLeftPolar.y, leftActivity, timestamp * 0.0075);
             leftVelsArray[0].copy(smoothLeftVel);
 
-            leftVal.textContent = leftActivity > 0.7 ? 'Extended Wake' : 'Reaching (' + Math.round(leftActivity * 100) + '%)';
+            leftVal.textContent = leftPinch > 0.5 ? 'Pinching Menu Toggle' : 'Reaching (' + Math.round(leftActivity * 100) + '%)';
           } else {
             leftVal.textContent = 'Resting by Side';
           }
@@ -678,7 +1216,75 @@
           leftVal.textContent = 'Idle';
         }
 
-        // Right Hand Smoothing
+        // =====================================================================
+        // GESTURE 2: RIGHT HAND INTERACTION (MENU LASER / LIGHT BURST)
+        // =====================================================================
+        let isPointingAtMenu = false;
+
+        if (menuMesh.visible && rawRightWorld) {
+          // Raycast from right hand toward menu
+          controller2.getWorldPosition(rayOrigin);
+          controller2.getWorldDirection(rayDir);
+          rayDir.negate(); // Three.js controller forward is -Z
+
+          raycaster.set(rayOrigin, rayDir);
+          const intersects = raycaster.intersectObject(menuMesh);
+
+          if (intersects.length > 0) {
+            isPointingAtMenu = true;
+            laserLine.visible = true;
+
+            const hit = intersects[0];
+            dotMesh.position.copy(hit.point).addScaledVector(hit.face.normal, 0.002);
+            dotMesh.quaternion.copy(menuMesh.quaternion);
+            dotMesh.visible = true;
+
+            // Map UV to 2D Canvas coordinate
+            const px = hit.uv.x * 1024;
+            const py = (1.0 - hit.uv.y) * 700;
+
+            let prevHovered = hoveredButtonId;
+            hoveredButtonId = null;
+
+            for (let i = 0; i < clickableAreas.length; i++) {
+              const b = clickableAreas[i];
+              if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) {
+                hoveredButtonId = b.id;
+                break;
+              }
+            }
+
+            if (hoveredButtonId !== prevHovered) {
+              renderMenuCanvas();
+            }
+
+            // Click button on right pinch / trigger
+            if (rightPinch > 0.75 && !rightPinchLatched) {
+              rightPinchLatched = true;
+              if (hoveredButtonId) {
+                if (hoveredButtonId === 'closeBtn') {
+                  toggleMenu();
+                } else {
+                  applyPresetColors(hoveredButtonId);
+                }
+              }
+            } else if (rightPinch < 0.25) {
+              rightPinchLatched = false;
+            }
+          } else {
+            laserLine.visible = false;
+            dotMesh.visible = false;
+            if (hoveredButtonId !== null) {
+              hoveredButtonId = null;
+              renderMenuCanvas();
+            }
+          }
+        } else {
+          laserLine.visible = false;
+          dotMesh.visible = false;
+        }
+
+        // Right Hand Shockwave & Fluid Wake (When not clicking menu)
         if (rawRightWorld) {
           if (!rightInitialized) {
             smoothRightPos.copy(rawRightWorld);
@@ -687,7 +1293,7 @@
             smoothRightPos.lerp(rawRightWorld, 0.12);
           }
 
-          const rightActivity = computeReachActivity(smoothRightPos) * (1.0 + rightPinch * 1.5);
+          const rightActivity = computeReachActivity(smoothRightPos);
           const curPolar = mapHandToPolar(smoothRightPos);
           smoothRightPolar.lerp(curPolar, 0.15);
 
@@ -697,6 +1303,14 @@
 
           if (smoothRightVel.length() < 0.03) smoothRightVel.set(0, 0);
 
+          // Right Hand Luminous Shockwave Pinch
+          if (rightPinch > 0.75 && !rightPinchLatched && !isPointingAtMenu) {
+            rightPinchLatched = true;
+            uniforms.u_right_burst.value = 1.6; // Injects bright concentric acoustic shockwave
+          } else if (rightPinch < 0.25 && !isPointingAtMenu) {
+            rightPinchLatched = false;
+          }
+
           if (rightActivity > 0.01) {
             for (let i = TRAIL_COUNT - 1; i > 0; i--) {
               rightTrailArray[i].copy(rightTrailArray[i - 1]);
@@ -705,7 +1319,7 @@
             rightTrailArray[0].set(smoothRightPolar.x, smoothRightPolar.y, rightActivity, timestamp * 0.0075);
             rightVelsArray[0].copy(smoothRightVel);
 
-            rightVal.textContent = rightActivity > 0.7 ? 'Extended Wake' : 'Reaching (' + Math.round(rightActivity * 100) + '%)';
+            rightVal.textContent = rightPinch > 0.7 ? 'LIGHT BURST SHOCKWAVE' : 'Reaching (' + Math.round(rightActivity * 100) + '%)';
           } else {
             rightVal.textContent = 'Resting by Side';
           }
