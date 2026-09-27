@@ -103,8 +103,8 @@
     Right Hand: <span id="right-val" class="val">Resting</span>
     <div class="hud-controls">
       • <b>Left Hand Pinch:</b> Toggle World-Locked Floating Palette Menu.<br>
-      • <b>Right Hand:</b> Point laser at menu buttons + pinch to select.<br>
-      • <b>Right Open Pinch:</b> High-intensity luminous shockwave.<br>
+      • <b>Right Hand:</b> Point stable laser at buttons; magnetic lock guarantees clicks.<br>
+      • <b>Right Open Pinch:</b> High-intensity luminous shockwave in open space.<br>
       • <b>3-Tier Antialiasing:</b> 4x Hardware MSAA + 1.25x SuperSampling.
     </div>
   </div>
@@ -269,14 +269,12 @@
       void main() {
         vec3 ray = normalize(vDirection);
 
-        // Focal Center Compression (High detail density straight ahead)
         float polarDist = acos(clamp(-ray.z, -0.9999, 0.9999));
         float polarAngle = atan(ray.y, ray.x + 1e-5) + u_kaleido_angle;
 
         const float PI = 3.14159265359;
         float focalDist = pow(polarDist / PI, 0.72) * PI * 1.5;
 
-        // 6-Petal Bilateral Mirroring
         float tau = 6.28318530718;
         float segAngle = tau / max(u_kaleido_segs, 1.0);
         float modA = mod(polarAngle, segAngle);
@@ -285,7 +283,6 @@
 
         vec2 st = vec2(cos(foldA), sin(foldA)) * focalDist;
 
-        // Fluid Wakes & Persistent Trails
         vec2 totalDisplacement = vec2(0.0);
         float totalRipples = 0.0;
         float handWakeGlow = 0.0;
@@ -318,7 +315,6 @@
           }
         }
 
-        // Right Hand Luminous Pinch Shockwave
         if (u_right_burst > 0.01) {
           vec4 tR0 = u_right_trail[0];
           vec2 toBurst = st - tR0.xy;
@@ -330,13 +326,11 @@
 
         st += totalDisplacement;
 
-        // Kinematic Stream Alignment
         float t = u_time * u_speed;
         float rad = u_flow_angle;
         mat2 alignFlow = mat2(cos(rad), sin(rad), -sin(rad), cos(rad));
         vec2 p = alignFlow * st * vec2(0.55, u_flow_stretch);
 
-        // Sacred Chamber Geometry
         float radDist = length(p);
         float angleP = atan(p.y, p.x + 1e-5);
         vec2 kDistort = vec2(fbm(p * 2.0 + t * 0.15), fbm(p * 2.0 - t * 0.12)) * (u_warp_scale * 0.22);
@@ -357,7 +351,6 @@
         f += totalRipples * 0.12;
         vec2 r = vec2(cos(angleP), sin(angleP)) * f;
 
-        // Analytic Antialiasing for Ridges
         float freq = u_contour_freq;
         float chroma = u_chroma_aberration * 0.22;
         
@@ -383,7 +376,6 @@
         float spec = pow(max(dot(normal, halfVec), 0.0), 22.0) * u_specular_shimmer;
         float fresnel = pow(clamp(1.0 - max(dot(normal, viewDir), 0.0), 0.0, 1.0), 3.0) * u_rim_glow;
 
-        // Dynamic Palette Harmonization
         vec3 col = mix(u_col_shadow, u_col_cool_a, clamp((f * f) * (3.2 * u_contrast), 0.0, 1.0));
         col = mix(col, u_col_cool_b, clamp(length(kDistort) * 0.9 + 0.35, 0.0, 1.0));
         col = mix(col, u_col_warm_b, clamp(r.x * r.x * (2.2 * u_contrast), 0.0, 1.0));
@@ -534,11 +526,12 @@
       ctx.arcTo(x + w, y, x + w, y + h, r);
       ctx.arcTo(x + w, y + h, x, y + h, r);
       ctx.arcTo(x, y + h, x, y, r);
-      ctx.arcTo(x, y, x + w, y, r);
+      ctx.arcTo(x, y + x, y, r);
       ctx.closePath();
     }
 
     let hoveredButtonId = null;
+    let lockedButtonId = null; // Magnetic Pinch-Lock Target
 
     function renderMenuCanvas() {
       clickableAreas.length = 0;
@@ -589,23 +582,30 @@
         const p = presets[key];
         const isSelected = (activePresetKey === key);
         const isHovered = (hoveredButtonId === key);
+        const isPressed = (lockedButtonId === key);
 
         clickableAreas.push({ id: key, x: bx, y: by, w: cardW, h: cardH, type: 'preset' });
 
-        ctx.fillStyle = isSelected
-          ? 'rgba(40, 160, 240, 0.32)'
-          : (isHovered ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.06)');
+        if (isPressed) {
+          ctx.fillStyle = 'rgba(0, 240, 255, 0.45)';
+        } else if (isSelected) {
+          ctx.fillStyle = 'rgba(40, 160, 240, 0.32)';
+        } else if (isHovered) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+        } else {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        }
         roundRect(ctx, bx, by, cardW, cardH, 16);
         ctx.fill();
 
-        ctx.lineWidth = isSelected ? 2.5 : 1.5;
-        ctx.strokeStyle = isSelected
+        ctx.lineWidth = isPressed ? 3.0 : (isSelected ? 2.5 : 1.5);
+        ctx.strokeStyle = (isPressed || isSelected)
           ? '#00f0ff'
-          : (isHovered ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.12)');
+          : (isHovered ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.12)');
         ctx.stroke();
 
-        ctx.font = (isSelected ? '700' : '600') + ' 20px -apple-system, sans-serif';
-        ctx.fillStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.88)';
+        ctx.font = (isSelected || isPressed ? '700' : '600') + ' 20px -apple-system, sans-serif';
+        ctx.fillStyle = (isSelected || isPressed) ? '#ffffff' : 'rgba(255, 255, 255, 0.88)';
         ctx.fillText(p.name, bx + 22, by + 45);
 
         const swatchColors = [p.shadow, p.coolA, p.coolB, p.warmB, p.warmA, p.crest];
@@ -668,15 +668,18 @@
       const closeBtnW = 240;
       const closeBtnH = 54;
       const isCloseHovered = (hoveredButtonId === 'closeBtn');
+      const isClosePressed = (lockedButtonId === 'closeBtn');
 
       clickableAreas.push({ id: 'closeBtn', x: closeBtnX, y: closeBtnY, w: closeBtnW, h: closeBtnH, type: 'action' });
 
-      ctx.fillStyle = isCloseHovered ? 'rgba(255, 80, 80, 0.35)' : 'rgba(255, 255, 255, 0.12)';
+      ctx.fillStyle = isClosePressed
+        ? 'rgba(255, 60, 60, 0.6)'
+        : (isCloseHovered ? 'rgba(255, 80, 80, 0.35)' : 'rgba(255, 255, 255, 0.12)');
       roundRect(ctx, closeBtnX, closeBtnY, closeBtnW, closeBtnH, 27);
       ctx.fill();
 
       ctx.lineWidth = 2;
-      ctx.strokeStyle = isCloseHovered ? '#ff5555' : 'rgba(255, 255, 255, 0.3)';
+      ctx.strokeStyle = (isCloseHovered || isClosePressed) ? '#ff5555' : 'rgba(255, 255, 255, 0.3)';
       ctx.stroke();
 
       ctx.font = '700 16px -apple-system, sans-serif';
@@ -710,6 +713,8 @@
       if (menuMesh.visible) {
         menuMesh.visible = false;
         menuVal.textContent = 'Closed';
+        lockedButtonId = null;
+        hoveredButtonId = null;
       } else {
         menuMesh.visible = true;
         menuVal.textContent = 'Active (World-Locked)';
@@ -740,7 +745,7 @@
     controller1.add(orb1);
     controller2.add(orb2);
 
-    const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.75 });
+    const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.85 });
     const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1.2)]);
     const laserLine = new THREE.Line(laserGeo, laserMat);
     scene.add(laserLine);
@@ -918,6 +923,7 @@
         let leftPinch = 0.0;
         let rightPinch = 0.0;
 
+        // Optical Hands Check
         if (hand1 && hand1.joints && hand1.joints['index-finger-tip']) {
           rawLeftWorld = hand1.joints['index-finger-tip'].position;
           const thmL = hand1.joints['thumb-tip'];
@@ -935,6 +941,7 @@
           }
         }
 
+        // Controller Fallback
         const session = renderer.xr.getSession();
         if (session && session.inputSources) {
           session.inputSources.forEach((s) => {
@@ -957,6 +964,7 @@
           leftPinchLatched = false;
         }
 
+        // Left Hand Smoothing & Fluid Wake
         if (rawLeftWorld) {
           if (!leftInitialized) {
             smoothLeftPos.copy(rawLeftWorld);
@@ -992,17 +1000,20 @@
           leftVal.textContent = 'Idle';
         }
 
-        // --- GESTURE 2: RIGHT HAND INTERACTION (MENU LASER / LIGHT BURST) ---
+        // =====================================================================
+        // GESTURE 2: STABLE TARGET RAY & PINCH-LOCK SELECTION
+        // =====================================================================
         let isPointingAtMenu = false;
 
         if (menuMesh.visible && rawRightWorld) {
-          // Robust Raycast: Use index finger vector if tracking hands, else controller orientation
-          if (hand2 && hand2.joints && hand2.joints['index-finger-tip'] && hand2.joints['index-finger-phalanx-proximal']) {
-            const tip = hand2.joints['index-finger-tip'].position;
-            const prox = hand2.joints['index-finger-phalanx-proximal'].position;
-            rayOrigin.copy(tip);
-            rayDir.subVectors(tip, prox).normalize();
+          // Use the stable hand knuckle / palm vector so flexing finger joints do NOT swing the ray
+          if (hand2 && hand2.joints && hand2.joints['wrist'] && hand2.joints['middle-finger-metacarpal']) {
+            const wristPos = hand2.joints['wrist'].position;
+            const palmKnuckle = hand2.joints['middle-finger-metacarpal'].position;
+            rayOrigin.copy(palmKnuckle);
+            rayDir.subVectors(palmKnuckle, wristPos).normalize();
           } else {
+            // Quest Controller native stable targeting ray
             controller2.getWorldPosition(rayOrigin);
             controller2.getWorldDirection(rayDir).negate();
           }
@@ -1012,19 +1023,17 @@
 
           if (intersects.length > 0 && intersects[0].uv) {
             isPointingAtMenu = true;
-
             const hit = intersects[0];
 
-            // Render laser beam between pointer origin and intersection point
+            // Render laser beam to menu surface
             const positions = laserLine.geometry.attributes.position.array;
             positions[0] = rayOrigin.x; positions[1] = rayOrigin.y; positions[2] = rayOrigin.z;
             positions[3] = hit.point.x; positions[4] = hit.point.y; positions[5] = hit.point.z;
             laserLine.geometry.attributes.position.needsUpdate = true;
             laserLine.visible = true;
 
-            // Compute menu world normal without relying on hit.face
+            // Stable menu normal
             planeNormal.set(0, 0, 1).applyQuaternion(menuMesh.quaternion);
-
             dotMesh.position.copy(hit.point).addScaledVector(planeNormal, 0.003);
             dotMesh.quaternion.copy(menuMesh.quaternion);
             dotMesh.visible = true;
@@ -1043,21 +1052,32 @@
               }
             }
 
-            if (hoveredButtonId !== prevHovered) {
+            // MAGNETIC PINCH-LOCK: Lock target as soon as pinch begins (> 0.35)
+            if (rightPinch > 0.35 && !lockedButtonId && hoveredButtonId) {
+              lockedButtonId = hoveredButtonId;
+            }
+
+            if (hoveredButtonId !== prevHovered || (rightPinch > 0.35 && !rightPinchLatched)) {
               renderMenuCanvas();
             }
 
+            // TRIGGER CLICK: Execute when pinch is complete (> 0.75)
             if (rightPinch > 0.75 && !rightPinchLatched) {
               rightPinchLatched = true;
-              if (hoveredButtonId) {
-                if (hoveredButtonId === 'closeBtn') {
+              const target = lockedButtonId || hoveredButtonId;
+              if (target) {
+                if (target === 'closeBtn') {
                   toggleMenu();
                 } else {
-                  applyPresetColors(hoveredButtonId);
+                  applyPresetColors(target);
                 }
               }
             } else if (rightPinch < 0.25) {
               rightPinchLatched = false;
+              if (lockedButtonId !== null) {
+                lockedButtonId = null;
+                renderMenuCanvas();
+              }
             }
           } else {
             laserLine.visible = false;
@@ -1066,13 +1086,21 @@
               hoveredButtonId = null;
               renderMenuCanvas();
             }
+            if (rightPinch < 0.25) {
+              rightPinchLatched = false;
+              lockedButtonId = null;
+            }
           }
         } else {
           laserLine.visible = false;
           dotMesh.visible = false;
+          if (rightPinch < 0.25) {
+            rightPinchLatched = false;
+            lockedButtonId = null;
+          }
         }
 
-        // Right Hand Fluid Displacement & Shockwave
+        // Right Hand Shockwave & Fluid Wake (Only in open space when not pointing at menu)
         if (rawRightWorld) {
           if (!rightInitialized) {
             smoothRightPos.copy(rawRightWorld);
@@ -1091,6 +1119,7 @@
 
           if (smoothRightVel.length() < 0.03) smoothRightVel.set(0, 0);
 
+          // Shockwave fires only in open space
           if (rightPinch > 0.75 && !rightPinchLatched && !isPointingAtMenu) {
             rightPinchLatched = true;
             uniforms.u_right_burst.value = 1.6;
