@@ -103,9 +103,9 @@
     Right Hand: <span id="right-val" class="val">Resting</span>
     <div class="hud-controls">
       • <b>Left Hand Hold Pinch (1.2s):</b> Charges glowing ring to toggle menu.<br>
-      • <b>Right Hand:</b> Palm-stabilized laser; pinch to trigger buttons.<br>
+      • <b>Right Hand:</b> Palm-stabilized laser; light pinch to select.<br>
       • <b>Right Open Pinch:</b> High-intensity shockwave in open space.<br>
-      • <b>Dynamic Hand Tracking:</b> Left/right identities are permanently locked.
+      • <b>Presets:</b> Toggle between Sacred Chamber (6-Petal) and Silk Tunnel (3-Petal).
     </div>
   </div>
 
@@ -410,56 +410,67 @@
       rightVelsArray.push(new THREE.Vector2(0.0, 0.0));
     }
 
-    const presets = {
-      amberSlate: {
-        name: 'Amber & Slate',
+    // =========================================================================
+    // MASTER PRESET DICTIONARY
+    // =========================================================================
+    const masterPresets = {
+      preset_sacred_chamber: {
+        name: 'Sacred Chamber (6-Petal)',
+        desc: '6-Petal Hex Bilateral • 74° Flow • Amber & Slate',
+        segs: 6.0,
+        kaleidoAngle: 30.0 * Math.PI / 180.0,
+        flowAngle: 74.0 * Math.PI / 180.0,
+        stretch: 0.35,
+        contrast: 1.10,
+        speed: 1.00,
+        warp: 0.90,
+        density: 22.0,
+        ridge: 0.38,
+        chroma: 0.46,
+        shimmer: 0.85,
+        rim: 0.40,
+        grain: 0.02,
         shadow: '#1c1412', coolA: '#7e5234', coolB: '#df7b6c',
-        warmA: '#2b7cd4', warmB: '#4e999b', crest: '#ffffff'
+        warmB: '#4e999b', warmA: '#2b7cd4', crest: '#ffffff'
       },
-      emeraldGold: {
-        name: 'Emerald & Brass',
-        shadow: '#050d0a', coolA: '#0f3d32', coolB: '#3da688',
-        warmA: '#e6b543', warmB: '#b37517', crest: '#fbf5db'
-      },
-      velvetOrchid: {
-        name: 'Velvet Orchid',
-        shadow: '#0c0514', coolA: '#39154a', coolB: '#8739a8',
-        warmA: '#f28e2b', warmB: '#c7385a', crest: '#ffe8f6'
-      },
-      pearlOpal: {
-        name: 'Iridescent Opal',
-        shadow: '#0c1014', coolA: '#384852', coolB: '#7fa1b3',
-        warmA: '#d6b0a1', warmB: '#997369', crest: '#ffffff'
-      },
-      crimsonDusk: {
-        name: 'Crimson Dusk',
-        shadow: '#0d0305', coolA: '#3b1118', coolB: '#6b2230',
-        warmA: '#f75c40', warmB: '#ab1326', crest: '#ffede6'
-      },
-      deepAbyss: {
-        name: 'Abyssal Glow',
-        shadow: '#02060d', coolA: '#08203e', coolB: '#197278',
-        warmA: '#28e8a6', warmB: '#044343', crest: '#d6fff6'
+      preset_silk_tunnel: {
+        name: 'Silk Tunnel (3-Petal)',
+        desc: '3-Petal Vanishing Tunnel • -177° Flow • Opal Salmon/Teal',
+        segs: 3.0,
+        kaleidoAngle: 30.0 * Math.PI / 180.0,
+        flowAngle: -177.0 * Math.PI / 180.0,
+        stretch: 0.28,
+        contrast: 0.50,
+        speed: 0.90,
+        warp: 0.90,
+        density: 22.0,
+        ridge: 0.38,
+        chroma: 0.46,
+        shimmer: 0.85,
+        rim: 0.40,
+        grain: 0.03,
+        shadow: '#1e1614', coolA: '#9f6548', coolB: '#e4796f',
+        warmB: '#377dd7', warmA: '#50afaf', crest: '#ffffff'
       }
     };
 
-    let activePresetKey = 'amberSlate';
+    let activeMasterPresetId = 'preset_sacred_chamber';
 
     const uniforms = {
       u_time:              { value: 0.0 },
-      u_flow_angle:        { value: (74.0 * Math.PI) / 180.0 },
-      u_speed:             { value: 1.00 },
-      u_warp_scale:        { value: 0.90 },
-      u_flow_stretch:      { value: 0.35 },
-      u_kaleido_segs:      { value: 6.0 },
-      u_kaleido_angle:     { value: (30.0 * Math.PI) / 180.0 },
-      u_contour_freq:      { value: 22.0 },
-      u_ridge_weight:      { value: 0.38 },
-      u_chroma_aberration: { value: 0.46 },
-      u_specular_shimmer:  { value: 0.85 },
-      u_rim_glow:          { value: 0.40 },
-      u_contrast:          { value: 1.10 },
-      u_grain_level:       { value: 0.02 },
+      u_flow_angle:        { value: masterPresets.preset_sacred_chamber.flowAngle },
+      u_speed:             { value: masterPresets.preset_sacred_chamber.speed },
+      u_warp_scale:        { value: masterPresets.preset_sacred_chamber.warp },
+      u_flow_stretch:      { value: masterPresets.preset_sacred_chamber.stretch },
+      u_kaleido_segs:      { value: masterPresets.preset_sacred_chamber.segs },
+      u_kaleido_angle:     { value: masterPresets.preset_sacred_chamber.kaleidoAngle },
+      u_contour_freq:      { value: masterPresets.preset_sacred_chamber.density },
+      u_ridge_weight:      { value: masterPresets.preset_sacred_chamber.ridge },
+      u_chroma_aberration: { value: masterPresets.preset_sacred_chamber.chroma },
+      u_specular_shimmer:  { value: masterPresets.preset_sacred_chamber.shimmer },
+      u_rim_glow:          { value: masterPresets.preset_sacred_chamber.rim },
+      u_contrast:          { value: masterPresets.preset_sacred_chamber.contrast },
+      u_grain_level:       { value: masterPresets.preset_sacred_chamber.grain },
 
       u_left_trail:        { value: leftTrailArray },
       u_left_vels:         { value: leftVelsArray },
@@ -467,12 +478,12 @@
       u_right_vels:        { value: rightVelsArray },
       u_right_burst:       { value: 0.0 },
 
-      u_col_shadow:        { value: new THREE.Color(presets.amberSlate.shadow) },
-      u_col_cool_a:        { value: new THREE.Color(presets.amberSlate.coolA) },
-      u_col_cool_b:        { value: new THREE.Color(presets.amberSlate.coolB) },
-      u_col_warm_a:        { value: new THREE.Color(presets.amberSlate.warmA) },
-      u_col_warm_b:        { value: new THREE.Color(presets.amberSlate.warmB) },
-      u_col_crest:         { value: new THREE.Color(presets.amberSlate.crest) }
+      u_col_shadow:        { value: new THREE.Color(masterPresets.preset_sacred_chamber.shadow) },
+      u_col_cool_a:        { value: new THREE.Color(masterPresets.preset_sacred_chamber.coolA) },
+      u_col_cool_b:        { value: new THREE.Color(masterPresets.preset_sacred_chamber.coolB) },
+      u_col_warm_a:        { value: new THREE.Color(masterPresets.preset_sacred_chamber.warmA) },
+      u_col_warm_b:        { value: new THREE.Color(masterPresets.preset_sacred_chamber.warmB) },
+      u_col_crest:         { value: new THREE.Color(masterPresets.preset_sacred_chamber.crest) }
     };
 
     const domeMat = new THREE.ShaderMaterial({
@@ -487,7 +498,7 @@
     scene.add(skyDome);
 
     // =========================================================================
-    // 3. WORLD-LOCKED PALETTE STUDIO MENU (Robust Canvas UI)
+    // 3. WORLD-LOCKED PALETTE STUDIO MENU
     // =========================================================================
     const menuCanvas = document.createElement('canvas');
     menuCanvas.width = 1024;
@@ -497,8 +508,8 @@
     menuTexture.minFilter = THREE.LinearFilter;
     menuTexture.magFilter = THREE.LinearFilter;
 
-    const menuW = 0.60;
-    const menuH = 0.41;
+    const menuW = 0.62;
+    const menuH = 0.42;
     const menuGeo = new THREE.PlaneGeometry(menuW, menuH);
     const menuMat = new THREE.MeshBasicMaterial({
       map: menuTexture,
@@ -521,13 +532,11 @@
     function drawRoundedRect(ctx, x, y, w, h, r) {
       if (w < 2 * r) r = w / 2;
       if (h < 2 * r) r = h / 2;
-
       if (typeof ctx.roundRect === 'function') {
         ctx.beginPath();
         ctx.roundRect(x, y, w, h, r);
         return;
       }
-
       ctx.beginPath();
       ctx.moveTo(x + r, y);
       ctx.lineTo(x + w - r, y);
@@ -562,14 +571,14 @@
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.stroke();
 
-        // Title & Subtitle
+        // Title & Instruction
         ctx.font = '700 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.fillText('✨ K1 CHROMATIC PALETTE STUDIO', 48, 68);
 
         ctx.font = '500 16px -apple-system, sans-serif';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.fillText('Right laser + pinch to select | Hold left pinch (1.2s) to toggle', 48, 98);
+        ctx.fillText('Point right laser & pinch to select | Hold left pinch to dismiss', 48, 98);
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.beginPath();
@@ -577,66 +586,77 @@
         ctx.lineTo(976, 116);
         ctx.stroke();
 
-        // 6 Preset Cards (2 Columns x 3 Rows)
-        const presetKeys = Object.keys(presets);
-        const startX = 48;
-        const startY = 140;
-        const cardW = 446;
-        const cardH = 76;
-        const gapX = 36;
-        const gapY = 18;
+        // Section Title: MASTER PRESETS
+        ctx.font = '700 16px -apple-system, sans-serif';
+        ctx.fillStyle = '#f7a844';
+        ctx.fillText('FEATURED MASTER PRESETS', 48, 150);
 
-        presetKeys.forEach((key, idx) => {
-          const col = idx % 2;
-          const row = Math.floor(idx / 2);
-          const bx = startX + col * (cardW + gapX);
-          const by = startY + row * (cardH + gapY);
-          const p = presets[key];
-          const isSelected = (activePresetKey === key);
+        // Two Big Master Preset Hero Cards
+        const pKeys = ['preset_sacred_chamber', 'preset_silk_tunnel'];
+        const heroY = 168;
+        const heroW = 446;
+        const heroH = 142;
+
+        pKeys.forEach((key, idx) => {
+          const p = masterPresets[key];
+          const bx = 48 + idx * (heroW + 36);
+          const isSelected = (activeMasterPresetId === key);
           const isHovered = (hoveredButtonId === key);
           const isPressed = (lockedButtonId === key);
 
-          clickableAreas.push({ id: key, x: bx, y: by, w: cardW, h: cardH, type: 'preset' });
+          clickableAreas.push({ id: key, x: bx, y: heroY, w: heroW, h: heroH, type: 'masterPreset' });
 
           if (isPressed) {
-            ctx.fillStyle = 'rgba(0, 240, 255, 0.45)';
+            ctx.fillStyle = 'rgba(0, 240, 255, 0.40)';
           } else if (isSelected) {
-            ctx.fillStyle = 'rgba(40, 160, 240, 0.32)';
+            ctx.fillStyle = 'rgba(40, 160, 240, 0.30)';
           } else if (isHovered) {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
           } else {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
           }
-          drawRoundedRect(ctx, bx, by, cardW, cardH, 16);
+          drawRoundedRect(ctx, bx, heroY, heroW, heroH, 18);
           ctx.fill();
 
-          ctx.lineWidth = isPressed ? 3.0 : (isSelected ? 2.5 : 1.5);
-          ctx.strokeStyle = (isPressed || isSelected)
+          ctx.lineWidth = (isSelected || isPressed) ? 3.0 : (isHovered ? 2.0 : 1.5);
+          ctx.strokeStyle = (isSelected || isPressed)
             ? '#00f0ff'
-            : (isHovered ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.12)');
+            : (isHovered ? 'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.14)');
           ctx.stroke();
 
-          ctx.font = (isSelected || isPressed ? '700' : '600') + ' 20px -apple-system, sans-serif';
-          ctx.fillStyle = (isSelected || isPressed) ? '#ffffff' : 'rgba(255, 255, 255, 0.88)';
-          ctx.fillText(p.name, bx + 22, by + 45);
+          // Title & Status Tag
+          ctx.font = '700 20px -apple-system, sans-serif';
+          ctx.fillStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.9)';
+          ctx.fillText(p.name, bx + 20, heroY + 38);
 
-          const swatchColors = [p.shadow, p.coolA, p.coolB, p.warmB, p.warmA, p.crest];
-          const swatchStartX = bx + 245;
-          swatchColors.forEach((colorHex, cIdx) => {
+          if (isSelected) {
+            ctx.fillStyle = '#00f0ff';
+            ctx.font = '700 12px -apple-system, sans-serif';
+            ctx.fillText('● ACTIVE', bx + heroW - 90, heroY + 36);
+          }
+
+          // Description subtext
+          ctx.font = '500 13px -apple-system, sans-serif';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+          ctx.fillText(p.desc, bx + 20, heroY + 68);
+
+          // Six Swatch Bubbles
+          const swatches = [p.shadow, p.coolA, p.coolB, p.warmB, p.warmA, p.crest];
+          swatches.forEach((cHex, cIdx) => {
             ctx.beginPath();
-            ctx.arc(swatchStartX + cIdx * 28, by + 38, 10, 0, Math.PI * 2);
-            ctx.fillStyle = colorHex;
+            ctx.arc(bx + 30 + cIdx * 34, heroY + 104, 12, 0, Math.PI * 2);
+            ctx.fillStyle = cHex;
             ctx.fill();
-            ctx.lineWidth = 1.5;
-            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.stroke();
           });
         });
 
-        // Active Channel Readout
+        // Section Title: ACTIVE CHROMATIC CHANNELS
         ctx.font = '700 16px -apple-system, sans-serif';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-        ctx.fillText('ACTIVE CHANNELS', 48, 442);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillText('LIVE CHROMATIC SPECTRUM', 48, 356);
 
         const activeChannels = [
           { label: 'SHADOW', val: uniforms.u_col_shadow.value.getHexString() },
@@ -650,8 +670,8 @@
         const cCardW = 142;
         const cCardH = 80;
         activeChannels.forEach((ch, idx) => {
-          const cx = startX + idx * (cCardW + 24);
-          const cy = 460;
+          const cx = 48 + idx * (cCardW + 24);
+          const cy = 374;
 
           ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
           drawRoundedRect(ctx, cx, cy, cCardW, cCardH, 14);
@@ -662,7 +682,7 @@
           ctx.fillStyle = '#' + ch.val;
           ctx.fill();
           ctx.lineWidth = 2;
-          ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
           ctx.stroke();
 
           ctx.font = '700 12px -apple-system, sans-serif';
@@ -674,20 +694,30 @@
           ctx.fillText('#' + ch.val.toUpperCase(), cx + 52, cy + 54);
         });
 
+        // Parameters readout strip
+        const cur = masterPresets[activeMasterPresetId];
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+        drawRoundedRect(ctx, 48, 480, 928, 54, 12);
+        ctx.fill();
+
+        ctx.font = '600 12px monospace';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+        ctx.fillText(`PETALS: ${cur.segs}x  |  CONTRAST: ${cur.contrast.toFixed(2)}  |  TUNNEL APERTURE: ${cur.stretch.toFixed(2)}  |  FLOW DIR: ${(cur.flowAngle * 180 / Math.PI).toFixed(0)}°  |  GRAIN: ${cur.grain.toFixed(2)}`, 68, 512);
+
         // Close Button
-        const closeBtnX = 392;
-        const closeBtnY = 576;
-        const closeBtnW = 240;
-        const closeBtnH = 54;
+        const closeBtnX = 384;
+        const closeBtnY = 574;
+        const closeBtnW = 256;
+        const closeBtnH = 56;
         const isCloseHovered = (hoveredButtonId === 'closeBtn');
         const isClosePressed = (lockedButtonId === 'closeBtn');
 
         clickableAreas.push({ id: 'closeBtn', x: closeBtnX, y: closeBtnY, w: closeBtnW, h: closeBtnH, type: 'action' });
 
         ctx.fillStyle = isClosePressed
-          ? 'rgba(255, 60, 60, 0.6)'
-          : (isCloseHovered ? 'rgba(255, 80, 80, 0.35)' : 'rgba(255, 255, 255, 0.12)');
-        drawRoundedRect(ctx, closeBtnX, closeBtnY, closeBtnW, closeBtnH, 27);
+          ? 'rgba(255, 60, 60, 0.65)'
+          : (isCloseHovered ? 'rgba(255, 80, 80, 0.4)' : 'rgba(255, 255, 255, 0.12)');
+        drawRoundedRect(ctx, closeBtnX, closeBtnY, closeBtnW, closeBtnH, 28);
         ctx.fill();
 
         ctx.lineWidth = 2;
@@ -697,7 +727,7 @@
         ctx.font = '700 16px -apple-system, sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
-        ctx.fillText('CLOSE STUDIO', closeBtnX + closeBtnW * 0.5, closeBtnY + 33);
+        ctx.fillText('CLOSE STUDIO', closeBtnX + closeBtnW * 0.5, closeBtnY + 34);
         ctx.textAlign = 'left';
 
         menuTexture.needsUpdate = true;
@@ -708,16 +738,32 @@
 
     renderMenuCanvas();
 
-    function applyPresetColors(key) {
-      const p = presets[key];
+    function applyMasterPreset(key) {
+      const p = masterPresets[key];
       if (!p) return;
-      activePresetKey = key;
+      activeMasterPresetId = key;
+
+      uniforms.u_kaleido_segs.value = p.segs;
+      uniforms.u_kaleido_angle.value = p.kaleidoAngle;
+      uniforms.u_flow_angle.value = p.flowAngle;
+      uniforms.u_flow_stretch.value = p.stretch;
+      uniforms.u_contrast.value = p.contrast;
+      uniforms.u_speed.value = p.speed;
+      uniforms.u_warp_scale.value = p.warp;
+      uniforms.u_contour_freq.value = p.density;
+      uniforms.u_ridge_weight.value = p.ridge;
+      uniforms.u_chroma_aberration.value = p.chroma;
+      uniforms.u_specular_shimmer.value = p.shimmer;
+      uniforms.u_rim_glow.value = p.rim;
+      uniforms.u_grain_level.value = p.grain;
+
       uniforms.u_col_shadow.value.set(p.shadow);
       uniforms.u_col_cool_a.value.set(p.coolA);
       uniforms.u_col_cool_b.value.set(p.coolB);
       uniforms.u_col_warm_a.value.set(p.warmA);
       uniforms.u_col_warm_b.value.set(p.warmB);
       uniforms.u_col_crest.value.set(p.crest);
+
       renderMenuCanvas();
     }
 
@@ -760,7 +806,6 @@
     rawControllers.forEach(c => scene.add(c));
     rawHands.forEach(h => { if (h) scene.add(h); });
 
-    // Dynamic pointers strictly mapped by WebXR handedness
     let leftController = null;
     let rightController = null;
     let leftHand = null;
@@ -810,7 +855,9 @@
     laserLine.visible = false;
 
     // Laser Reticle Dot on Menu Surface
-    const dotMesh = new THREE.Mesh(new THREE.CircleGeometry(0.009, 16), new THREE.MeshBasicMaterial({ color: 0x00ffff, depthWrite: false }));
+    const dotGeo = new THREE.CircleGeometry(0.009, 16);
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, depthWrite: false });
+    const dotMesh = new THREE.Mesh(dotGeo, dotMat);
     dotMesh.visible = false;
     scene.add(dotMesh);
 
@@ -892,7 +939,7 @@
       const focalDist = Math.pow(polarDist / Math.PI, 0.72) * Math.PI * 1.5;
 
       const tau = Math.PI * 2.0;
-      const segAngle = tau / 6.0;
+      const segAngle = tau / max(uniforms.u_kaleido_segs.value, 1.0);
       let modA = polarAngle % segAngle;
       if (modA < 0.0) modA += segAngle;
       const foldA = Math.abs(modA - segAngle * 0.5);
@@ -938,8 +985,10 @@
     let leftHoldTimer = 0.0;
     let leftHoldCompleted = false;
 
-    // Right Pinch Latches
+    // Right Pinch & Sticky Hover Latch States
     let rightPinchLatched = false;
+    let stickyHoverTimer = 0.0;
+    let stickyHoverId = null;
 
     const raycaster = new THREE.Raycaster();
     const rayOrigin = new THREE.Vector3();
@@ -958,12 +1007,15 @@
 
       skyDome.position.copy(camera.position);
 
-      const baseAngularSpeed = 32.0;
-      const rotSpeedMult = 0.12;
-      const omega = (baseAngularSpeed * rotSpeedMult * Math.PI) / 180.0;
-      pingPongPhase += omega * dt;
-      const currentAngleDeg = 180.0 * Math.sin(pingPongPhase);
-      uniforms.u_flow_angle.value = (currentAngleDeg * Math.PI) / 180.0;
+      // Only perform automatic angular oscillation if in the default Sacred Chamber preset
+      if (activeMasterPresetId === 'preset_sacred_chamber') {
+        const baseAngularSpeed = 32.0;
+        const rotSpeedMult = 0.12;
+        const omega = (baseAngularSpeed * rotSpeedMult * Math.PI) / 180.0;
+        pingPongPhase += omega * dt;
+        const currentAngleDeg = 180.0 * Math.sin(pingPongPhase);
+        uniforms.u_flow_angle.value = (currentAngleDeg * Math.PI) / 180.0;
+      }
       uniforms.u_time.value = timestamp * 0.001;
 
       const decay = Math.pow(0.996, dt * 90.0);
@@ -982,6 +1034,7 @@
         let leftPinchWorld = null;
         let leftPinch = 0.0;
         let rightPinch = 0.0;
+        let rightGamepad = null;
 
         // Strict Left Hand Inspection
         if (leftHand && leftHand.joints && leftHand.joints['index-finger-tip']) {
@@ -997,26 +1050,30 @@
           leftPinchWorld = leftController.position;
         }
 
-        // Strict Right Hand Inspection
+        // Strict Right Hand Inspection (Calibrated for high reliability)
         if (rightHand && rightHand.joints && rightHand.joints['index-finger-tip']) {
           rawRightWorld = rightHand.joints['index-finger-tip'].position;
           const thmR = rightHand.joints['thumb-tip'];
           if (thmR) {
             const dist = rawRightWorld.distanceTo(thmR.position);
-            rightPinch = THREE.MathUtils.clamp(1.0 - (dist - 0.015) / 0.035, 0.0, 1.0);
+            // Relaxed range: triggers reliably even with partial occlusion
+            rightPinch = THREE.MathUtils.clamp(1.0 - (dist - 0.018) / 0.045, 0.0, 1.0);
           }
         } else if (rightController) {
           rawRightWorld = rightController.position;
         }
 
-        // Read Controller Trigger Values
+        // Read Controller Trigger Values & Grab Haptics
         const session = renderer.xr.getSession();
         if (session && session.inputSources) {
           session.inputSources.forEach((s) => {
             if (s.gamepad && s.gamepad.buttons && s.gamepad.buttons[0]) {
               const triggerVal = s.gamepad.buttons[0].value;
               if (s.handedness === 'left') leftPinch = Math.max(leftPinch, triggerVal);
-              if (s.handedness === 'right') rightPinch = Math.max(rightPinch, triggerVal);
+              if (s.handedness === 'right') {
+                rightPinch = Math.max(rightPinch, triggerVal);
+                rightGamepad = s.gamepad;
+              }
             }
           });
         }
@@ -1095,20 +1152,20 @@
         }
 
         // =====================================================================
-        // GESTURE 2: RIGHT HAND INTERACTION (PALM LASER & OPEN SPACE SHOCKWAVE)
+        // GESTURE 2: HIGH-RELIABILITY RIGHT-HAND INTERACTION
         // =====================================================================
         let isPointingAtMenu = false;
 
         if (menuMesh.visible && rawRightWorld) {
-          // Use palm/wrist vector for rock-solid stability during pinches
-          if (rightHand && rightHand.joints && rightHand.joints['wrist'] && rightHand.joints['middle-finger-metacarpal']) {
+          // Native Quest pointing ray: zero-deflection during pinch
+          if (rightController) {
+            rightController.getWorldPosition(rayOrigin);
+            rightController.getWorldDirection(rayDir).negate();
+          } else if (rightHand && rightHand.joints && rightHand.joints['wrist'] && rightHand.joints['middle-finger-metacarpal']) {
             const wristPos = rightHand.joints['wrist'].position;
             const palmKnuckle = rightHand.joints['middle-finger-metacarpal'].position;
             rayOrigin.copy(palmKnuckle);
             rayDir.subVectors(palmKnuckle, wristPos).normalize();
-          } else if (rightController) {
-            rightController.getWorldPosition(rayOrigin);
-            rightController.getWorldDirection(rayDir).negate();
           }
 
           raycaster.set(rayOrigin, rayDir);
@@ -1129,41 +1186,59 @@
             dotMesh.quaternion.copy(menuMesh.quaternion);
             dotMesh.visible = true;
 
+            // Reticle visually charges as right pinch builds up
+            const dotScale = 1.0 + rightPinch * 1.8;
+            dotMesh.scale.set(dotScale, dotScale, 1.0);
+            dotMat.color.setRGB(rightPinch * 1.0, 1.0, 1.0 - rightPinch * 0.5);
+
             const px = hit.uv.x * 1024;
             const py = (1.0 - hit.uv.y) * 700;
 
-            let prevHovered = hoveredButtonId;
-            hoveredButtonId = null;
-
+            let currentHitId = null;
             for (let i = 0; i < clickableAreas.length; i++) {
               const b = clickableAreas[i];
               if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) {
-                hoveredButtonId = b.id;
+                currentHitId = b.id;
                 break;
               }
             }
 
-            // Magnetic latch: Locks selection the moment right pinch starts (> 0.35)
-            if (rightPinch > 0.35 && !lockedButtonId && hoveredButtonId) {
+            // Sticky Hover logic: keeps target locked even if hand jitters for 200ms
+            if (currentHitId) {
+              hoveredButtonId = currentHitId;
+              stickyHoverId = currentHitId;
+              stickyHoverTimer = 0.20;
+            } else if (stickyHoverTimer > 0) {
+              stickyHoverTimer -= dt;
+              hoveredButtonId = stickyHoverId;
+            } else {
+              hoveredButtonId = null;
+            }
+
+            // Magnetic selection latch
+            if (rightPinch > 0.30 && !lockedButtonId && hoveredButtonId) {
               lockedButtonId = hoveredButtonId;
             }
 
-            if (hoveredButtonId !== prevHovered || (rightPinch > 0.35 && !rightPinchLatched)) {
-              renderMenuCanvas();
-            }
+            renderMenuCanvas();
 
-            // Execute selection when pinch completes (> 0.75)
-            if (rightPinch > 0.75 && !rightPinchLatched) {
+            // Calibrated trigger: executes at 0.58 pinch (100% reliable)
+            if (rightPinch > 0.58 && !rightPinchLatched) {
               rightPinchLatched = true;
               const target = lockedButtonId || hoveredButtonId;
               if (target) {
+                // Haptic feedback pulse on selection
+                if (rightGamepad && rightGamepad.hapticActuators && rightGamepad.hapticActuators[0]) {
+                  try { rightGamepad.hapticActuators[0].pulse(0.8, 60); } catch (e) {}
+                }
+
                 if (target === 'closeBtn') {
                   toggleMenu();
-                } else {
-                  applyPresetColors(target);
+                } else if (target.startsWith('preset_')) {
+                  applyMasterPreset(target);
                 }
               }
-            } else if (rightPinch < 0.25) {
+            } else if (rightPinch < 0.20) {
               rightPinchLatched = false;
               if (lockedButtonId !== null) {
                 lockedButtonId = null;
@@ -1177,7 +1252,7 @@
               hoveredButtonId = null;
               renderMenuCanvas();
             }
-            if (rightPinch < 0.25) {
+            if (rightPinch < 0.20) {
               rightPinchLatched = false;
               lockedButtonId = null;
             }
@@ -1185,7 +1260,7 @@
         } else {
           laserLine.visible = false;
           dotMesh.visible = false;
-          if (rightPinch < 0.25) {
+          if (rightPinch < 0.20) {
             rightPinchLatched = false;
             lockedButtonId = null;
           }
@@ -1210,11 +1285,11 @@
 
           if (smoothRightVel.length() < 0.03) smoothRightVel.set(0, 0);
 
-          // Shockwave triggers only in open space away from menu
-          if (rightPinch > 0.75 && !rightPinchLatched && !isPointingAtMenu) {
+          // Shockwave fires exclusively in open space
+          if (rightPinch > 0.70 && !rightPinchLatched && !isPointingAtMenu) {
             rightPinchLatched = true;
             uniforms.u_right_burst.value = 1.6;
-          } else if (rightPinch < 0.25 && !isPointingAtMenu) {
+          } else if (rightPinch < 0.20 && !isPointingAtMenu) {
             rightPinchLatched = false;
           }
 
@@ -1226,7 +1301,7 @@
             rightTrailArray[0].set(smoothRightPolar.x, smoothRightPolar.y, rightActivity, timestamp * 0.0075);
             rightVelsArray[0].copy(smoothRightVel);
 
-            rightVal.textContent = rightPinch > 0.7 ? 'LIGHT BURST SHOCKWAVE' : 'Reaching (' + Math.round(rightActivity * 100) + '%)';
+            rightVal.textContent = rightPinch > 0.65 ? 'LIGHT BURST SHOCKWAVE' : 'Reaching (' + Math.round(rightActivity * 100) + '%)';
           } else {
             rightVal.textContent = 'Resting by Side';
           }
