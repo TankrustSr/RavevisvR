@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Volumetric Contours - Quest 3 WebXR</title>
+  <title>Volumetric Contours - Quest 3 Hyperspace Engine</title>
   <style>
     body, html {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background: #06070a;
+      background: #040508;
       width: 100%;
       height: 100%;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -23,49 +23,58 @@
       position: absolute;
       top: 16px;
       left: 16px;
-      color: rgba(255, 255, 255, 0.9);
-      background: rgba(14, 15, 22, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      padding: 14px 18px;
-      border-radius: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: rgba(255, 255, 255, 0.92);
+      background: rgba(12, 14, 20, 0.85);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      padding: 16px 20px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
       pointer-events: none;
       z-index: 10;
-      max-width: 320px;
+      max-width: 340px;
       font-size: 13px;
       line-height: 1.5;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     }
     #ui-hud h2 {
       margin: 0 0 6px 0;
       font-size: 15px;
       color: #79c0ff;
+      letter-spacing: 0.5px;
     }
     #ui-hud span.val {
       color: #f7a844;
       font-weight: 600;
+    }
+    .hud-controls {
+      margin-top: 10px;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.65);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 8px;
     }
     #vr-btn {
       position: absolute;
       bottom: 28px;
       left: 50%;
       transform: translateX(-50%);
-      padding: 14px 28px;
+      padding: 14px 32px;
       font-size: 15px;
       font-weight: 700;
       letter-spacing: 1px;
       color: #fff;
-      background: #1c64f2;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      border-radius: 10px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      background: linear-gradient(135deg, #1c64f2 0%, #00f0ff 100%);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 240, 255, 0.35);
       cursor: pointer;
       z-index: 100;
-      transition: background 0.2s, transform 0.1s;
+      transition: transform 0.1s, box-shadow 0.2s;
     }
     #vr-btn:active {
       transform: translateX(-50%) scale(0.96);
-      background: #1a56db;
+      box-shadow: 0 4px 16px rgba(0, 240, 255, 0.2);
     }
     #err-banner {
       position: absolute;
@@ -81,37 +90,46 @@
     }
   </style>
 
-  <!-- Production Three.js UMD (Zero import maps / no module loader failure) -->
+  <!-- Production Three.js UMD -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 </head>
 <body>
   <div id="err-banner"></div>
 
   <div id="ui-hud">
-    <h2>💎 K1 Sacred Chamber (Quest 3)</h2>
-    Status: <span id="status-val" class="val">2D Browser Preview</span><br>
-    Hardware: <span id="hw-val" class="val">Ready</span><br>
-    Span: <span id="span-val" class="val">0.50m</span> | Pinch: <span id="pinch-val" class="val">0.00</span>
+    <h2>💎 K1 Hyperspace Chamber (Quest 3)</h2>
+    Engine: <span id="engine-val" class="val">Sacred Chamber</span><br>
+    Space-Fold: <span id="fold-val" class="val">Inception Overhang</span><br>
+    Warp Travel: <span id="speed-val" class="val">1.20x</span><br>
+    Pinch / Trigger: <span id="pinch-val" class="val">0.00</span> | Span: <span id="span-val" class="val">0.50m</span>
+    <div class="hud-controls">
+      <b>Quest Controller & Gesture Mappings:</b><br>
+      • <b>Thumbstick Y:</b> Throttle Warp Travel (Forward/Reverse)<br>
+      • <b>Thumbstick X:</b> Swirl Rotation Steering<br>
+      • <b>A / X Button (or Pinch):</b> Cycle Space-Fold Distortions<br>
+      • <b>B / Y Button:</b> Cycle Shader Archetypes<br>
+      • <b>Trigger / Hand Pinch:</b> Inject Luminous Shockwave
+    </div>
   </div>
 
   <button id="vr-btn">ENTER VR</button>
   <div id="canvas-container"></div>
 
   <script>
-    // Global error handler for display on the Quest screen
     window.addEventListener('error', (e) => {
       const banner = document.getElementById('err-banner');
       banner.style.display = 'block';
-      banner.textContent = 'Error: ' + e.message;
+      banner.textContent = 'VR Error: ' + e.message;
     });
 
-    const statusVal = document.getElementById('status-val');
-    const hwVal = document.getElementById('hw-val');
+    const engineVal = document.getElementById('engine-val');
+    const foldVal = document.getElementById('fold-val');
+    const speedVal = document.getElementById('speed-val');
     const spanVal = document.getElementById('span-val');
     const pinchVal = document.getElementById('pinch-val');
     const vrBtn = document.getElementById('vr-btn');
 
-    // 1. Scene & Setup
+    // 1. Scene, Camera & Renderer
     const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
 
@@ -119,18 +137,17 @@
     camera.position.set(0, 0, 0.1);
 
     const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(1.0); // 1.0 DPR maintains 72-90 FPS on Snapdragon XR2
+    renderer.setPixelRatio(1.0); // Strict 1.0 DPR for solid 90Hz fill-rate on Snapdragon XR2
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
     container.appendChild(renderer.domElement);
 
-    // 2. Geometry & Shader (DoubleSide ensures it is never culled)
+    // 2. Dome Geometry & Full Procedural Shader
     const domeGeo = new THREE.SphereGeometry(60, 48, 24);
 
     const vertexShader = `
       varying vec3 vDirection;
       void main() {
-        // Pass model position directly as the sphere direction vector
         vDirection = position;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
@@ -141,6 +158,7 @@
       varying vec3 vDirection;
 
       uniform float u_time;
+      uniform float u_travel_dist;
       uniform float u_flow_angle;
       uniform float u_speed;
       uniform float u_warp_scale;
@@ -153,11 +171,16 @@
       uniform float u_specular_shimmer;
       uniform float u_rim_glow;
       uniform float u_contrast;
+      uniform float u_grain_level;
+
+      uniform float u_space_fold;      // 0: Standard, 1: Inception Overhang, 2: Möbius Twist, 3: Wormhole Grav Lens
+      uniform float u_engine_type;     // 0: Sacred Chamber, 1: Retrowave Synthgrid, 2: Gyroid Cymatics, 3: Agate Geode
 
       uniform vec2 u_hand_impulse;
       uniform float u_pinch_force;
       uniform float u_hand_span;
 
+      // K1 Color Palette
       uniform vec3 u_col_shadow;
       uniform vec3 u_col_cool_a;
       uniform vec3 u_col_cool_b;
@@ -168,6 +191,10 @@
       vec2 hash(vec2 p) {
         p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
         return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+      }
+
+      float hash1(vec2 p) {
+        return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
       }
 
       float noise(vec2 p) {
@@ -223,7 +250,6 @@
         vec2 b = mod(p - s * 0.5, s) - s * 0.5;
         vec2 g = dot(a, a) < dot(b, b) ? a : b;
 
-        // Safe atan to prevent Adreno GPU NaN crash
         float angle = atan(g.y, g.x + 1e-5) + 3.14159265;
         float sector = floor(mod(angle / 1.04719755, 6.0));
         float facetID = mod(sector, 3.0);
@@ -236,43 +262,110 @@
       void main() {
         vec3 ray = normalize(vDirection);
 
-        // Safe acos & safe atan
+        // --- 1. INCEPTION SPACE-FOLD DISTORTIONS ---
+        if (u_space_fold > 0.5 && u_space_fold < 1.5) {
+          // Inception Overhang: Folds overhead sky down into an infinite ceiling
+          float bend = ray.y * 1.25;
+          ray.y = ray.y * cos(bend) - abs(ray.z) * sin(bend);
+          ray = normalize(ray);
+        } else if (u_space_fold >= 1.5 && u_space_fold < 2.5) {
+          // Möbius Spacetime Twist: Warps angle proportional to radial depth
+          float twist = atan(ray.y, ray.x + 1e-5) + (1.0 - abs(ray.z)) * 1.8;
+          float rCross = length(ray.xy);
+          ray.x = cos(twist) * rCross;
+          ray.y = sin(twist) * rCross;
+          ray = normalize(ray);
+        } else if (u_space_fold >= 2.5) {
+          // Wormhole Gravitational Lens: Deflects peripheral rays toward singularity
+          float rLens = length(ray.xy);
+          float deflection = 0.35 / (rLens * rLens + 0.08);
+          ray.xy -= ray.xy * deflection * 0.25;
+          ray = normalize(ray);
+        }
+
+        // --- 2. 360° HYPERSPACE LOG-POLAR TUNNEL WARPING ---
         float polarDist = acos(clamp(-ray.z, -0.9999, 0.9999));
         float polarAngle = atan(ray.y, ray.x + 1e-5) + u_kaleido_angle;
 
+        // Bilateral Kaleidoscope Mirroring
         float tau = 6.28318530718;
         float segAngle = tau / max(u_kaleido_segs, 1.0);
         float modA = mod(polarAngle, segAngle);
         if (modA < 0.0) modA += segAngle;
         float foldA = abs(modA - segAngle * 0.5);
 
-        vec2 st = vec2(cos(foldA), sin(foldA)) * polarDist * 1.4;
+        // Infinite Log-Polar Advection: Creates the physical sensation of flying through a corridor
+        float tunnelScale = 2.2;
+        float logDepth = (log(max(polarDist, 0.003)) - (-1.1394)) * tunnelScale - u_travel_dist;
+        float corridorU = foldA * tunnelScale;
+
+        vec2 st = vec2(corridorU, logDepth);
         st += u_hand_impulse * 0.35;
 
+        // Dynamic Hand-Span Ribbon Stretch
         float dynamicStretch = u_flow_stretch * (0.8 + u_hand_span * 0.4);
         float t = u_time * u_speed;
         float rad = u_flow_angle;
         mat2 alignFlow = mat2(cos(rad), sin(rad), -sin(rad), cos(rad));
         vec2 p = alignFlow * st * vec2(0.55, dynamicStretch);
 
-        float radDist = length(p);
-        float angleP = atan(p.y, p.x + 1e-5);
-        vec2 kDistort = vec2(fbm(p * 1.8 + t * 0.15), fbm(p * 1.8 - t * 0.12)) * (u_warp_scale * 0.22);
-        vec2 kp = p + kDistort;
+        // --- 3. MULTI-ENGINE PROCEDURAL GENERATION ---
+        float f = 0.0;
+        vec2 q = vec2(0.0);
+        vec2 r = vec2(0.0);
+        vec3 normalPerturb = vec3(0.0);
+        float centerMask = 0.0;
 
-        vec3 rBlocks = rhombilleDiamonds(kp * 4.2);
-        float centerMask = 1.0 - smoothstep(0.45, 0.85, radDist);
-        float facetShade = (rBlocks.x < 0.5) ? 0.95 : ((rBlocks.x < 1.5) ? 0.65 : 0.40);
+        if (u_engine_type < 0.5) {
+          // 💎 Sacred Chamber (Faceted Diamonds, Sacred Flower of Life & Concentric Lace)
+          float radDist = length(p);
+          float angleP = atan(p.y, p.x + 1e-5);
+          vec2 kDistort = vec2(fbm(p * 1.8 + t * 0.15), fbm(p * 1.8 - t * 0.12)) * (u_warp_scale * 0.22);
+          vec2 kp = p + kDistort;
 
-        float fol = flowerOfLife(kp * 1.8);
-        float ringWaves = abs(sin(radDist * 24.0 - t * 1.2 + sin(angleP * 12.0) * 0.4));
-        float chevrons = abs(sin(angleP * 24.0 + radDist * 16.0));
-        float beads = 1.0 - smoothstep(0.12, 0.28, length(fract(vec2(angleP * 3.82, radDist * 6.0)) - 0.5));
-        float filigreeLace = max(fol * 0.8, chevrons * 0.5) + ringWaves * 0.4 + beads * 0.5;
+          vec3 rBlocks = rhombilleDiamonds(kp * 4.2);
+          centerMask = 1.0 - smoothstep(0.45, 0.85, radDist);
+          float facetShade = (rBlocks.x < 0.5) ? 0.95 : ((rBlocks.x < 1.5) ? 0.65 : 0.40);
 
-        float f = mix(filigreeLace, facetShade * 1.2 + rBlocks.y * 0.6, centerMask);
-        vec2 r = vec2(cos(angleP), sin(angleP)) * f;
+          float fol = flowerOfLife(kp * 1.8);
+          float ringWaves = abs(sin(radDist * 24.0 - t * 1.2 + sin(angleP * 12.0) * 0.4));
+          float chevrons = abs(sin(angleP * 24.0 + radDist * 16.0));
+          float beads = 1.0 - smoothstep(0.12, 0.28, length(fract(vec2(angleP * 3.82, radDist * 6.0)) - 0.5));
+          float filigreeLace = max(fol * 0.8, chevrons * 0.5) + ringWaves * 0.4 + beads * 0.5;
 
+          f = mix(filigreeLace, facetShade * 1.2 + rBlocks.y * 0.6, centerMask);
+          q = kDistort;
+          r = vec2(cos(angleP), sin(angleP)) * f;
+          normalPerturb = vec3(sin(rBlocks.z * 18.0), cos(rBlocks.z * 18.0), 0.0) * centerMask * 0.85;
+
+        } else if (u_engine_type < 1.5) {
+          // ⚡ Retrowave Synthgrid (Vector Wireframes)
+          vec2 retroP = p * 4.5;
+          retroP.y += t * 3.0;
+          vec2 grid = abs(fract(retroP) - 0.5);
+          float wire = max(1.0 - smoothstep(0.0, 0.08, grid.x), 1.0 - smoothstep(0.0, 0.08, grid.y));
+          q = vec2(sin(p.y * 3.0), cos(p.x * 3.0)) * (u_warp_scale * 0.25);
+          r = grid;
+          f = wire * 0.85 + 0.15 * fbm(p * 1.5);
+
+        } else if (u_engine_type < 2.5) {
+          // 🌀 Gyroid Cymatics (Resonance Wave)
+          vec2 gp = p * 3.0 + vec2(t * 0.15, -t * 0.12);
+          vec2 gWarp = vec2(sin(gp.y * 1.2 + t), cos(gp.x * 1.2 - t)) * (u_warp_scale * 0.6);
+          gp += gWarp;
+          float gVal = sin(gp.x) * cos(gp.y) + sin(gp.y) * cos(t * 0.4) + sin(t * 0.4) * cos(gp.x);
+          q = gWarp;
+          r = vec2(sin(gp.x + gVal), cos(gp.y - gVal));
+          f = 0.5 + 0.5 * gVal + 0.25 * fbm(p * 2.0 + r);
+
+        } else {
+          // 🪨 Agate Geode (Cellular Fluid)
+          q = vec2(fbm(p + vec2(0.0, t * 0.2)), fbm(p + vec2(4.3, -t * 0.18)));
+          r = vec2(fbm(p + u_warp_scale * q + t * 0.12), fbm(p + u_warp_scale * q - t * 0.09));
+          f = fbm(p + (u_warp_scale * 1.15) * r);
+        }
+
+        // --- 4. OPTICS: CHROMATIC PRISMATIC DISPERSION ---
         float freq = u_contour_freq;
         float chroma = u_chroma_aberration * 0.22;
         float ridgeR = abs(sin(f * freq + (r.x + r.y) * 1.5 + chroma));
@@ -281,33 +374,50 @@
         vec3 ridges = vec3(smoothstep(0.65, 0.95, ridgeR), smoothstep(0.65, 0.95, ridgeG), smoothstep(0.65, 0.95, ridgeB));
         float bands = smoothstep(0.15, 0.85, sin(f * (freq * 0.45) + r.x * 2.5));
 
-        vec3 normalPerturb = vec3(sin(rBlocks.z * 18.0), cos(rBlocks.z * 18.0), 0.0) * centerMask * 0.85;
+        // --- 5. 3D SPECULAR LIGHTING & FRESNEL RIM SHADOWS ---
         vec3 normal = normalize(vec3(-r.x * 1.8, -r.y * 1.8, 0.75) + normalPerturb);
         vec3 lightDir = normalize(vec3(0.35, 0.85, 0.45));
         vec3 viewDir = -ray;
         vec3 halfVec = normalize(lightDir + viewDir);
+
         float spec = pow(max(dot(normal, halfVec), 0.0), 22.0) * u_specular_shimmer;
         float fresnel = pow(clamp(1.0 - max(dot(normal, viewDir), 0.0), 0.0, 1.0), 3.0) * u_rim_glow;
 
+        // --- 6. K1 PALETTE HARMONIZATION ---
         vec3 col = mix(u_col_shadow, u_col_cool_a, clamp((f * f) * (3.2 * u_contrast), 0.0, 1.0));
-        col = mix(col, u_col_cool_b, clamp(length(kDistort) * 0.9 + 0.35, 0.0, 1.0));
+        col = mix(col, u_col_cool_b, clamp(length(q) * 0.9 + 0.35, 0.0, 1.0));
         col = mix(col, u_col_warm_b, clamp(r.x * r.x * (2.2 * u_contrast), 0.0, 1.0));
         col = mix(col, u_col_warm_a, clamp(r.y * 1.4, 0.0, 1.0));
 
+        // Specular Crest & Facet Illumination
         col += (u_col_crest * bands * 0.18) + (ridges * u_col_crest * u_ridge_weight);
         col += u_col_crest * spec * 1.4;
         col += mix(u_col_cool_b, u_col_crest, 0.65) * fresnel;
-        col += vec3(0.3, 0.8, 1.0) * u_pinch_force * 0.7;
 
+        // Interactive Hand Pulse / Acoustic Shockwave
+        col += vec3(0.1, 0.9, 1.0) * u_pinch_force * 0.85;
+
+        // Core Vanishing-Point Glow
+        float centerGlow = exp(-polarDist * 8.5) * 0.45;
+        col += u_col_crest * centerGlow;
+
+        // Contrast Depth Falloff
         col *= (0.75 + 0.45 * f * u_contrast);
+
+        // Mineral Micro-Grain Dithering (Eliminates VR Display Banding)
+        if (u_grain_level > 0.001) {
+          float grain = (hash1(gl_FragCoord.xy + fract(u_time * 0.1)) - 0.5) * u_grain_level;
+          col += grain;
+        }
 
         gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
       }
     `;
 
-    // Uniforms configured to the K1 preset
+    // Uniform Values matching your K1 Screen Setup
     const uniforms = {
       u_time:              { value: 0.0 },
+      u_travel_dist:       { value: 0.0 },
       u_flow_angle:        { value: (74.0 * Math.PI) / 180.0 },
       u_speed:             { value: 1.00 },
       u_warp_scale:        { value: 0.90 },
@@ -320,6 +430,10 @@
       u_specular_shimmer:  { value: 0.85 },
       u_rim_glow:          { value: 0.40 },
       u_contrast:          { value: 1.10 },
+      u_grain_level:       { value: 0.035 },
+
+      u_space_fold:        { value: 1.0 }, // 1: Inception Overhang by default
+      u_engine_type:       { value: 0.0 }, // 0: Sacred Chamber by default
 
       u_hand_impulse:      { value: new THREE.Vector2(0.0, 0.0) },
       u_pinch_force:       { value: 0.0 },
@@ -337,22 +451,22 @@
       vertexShader: vertexShader,
       fragmentShader: fragmentShader,
       uniforms: uniforms,
-      side: THREE.DoubleSide, // Guarantees the geometry is visible regardless of winding
+      side: THREE.DoubleSide,
       depthWrite: false
     });
 
     const skyDome = new THREE.Mesh(domeGeo, domeMat);
     scene.add(skyDome);
 
-    // 3. Simple Visual Indicators for Controllers/Hands
+    // 3. Quest Controllers & Hand Pointers
     const controller1 = renderer.xr.getController(0);
     const controller2 = renderer.xr.getController(1);
     scene.add(controller1);
     scene.add(controller2);
 
-    const pointerGeo = new THREE.SphereGeometry(0.025, 12, 12);
-    const pointerMat1 = new THREE.MeshBasicMaterial({ color: 0x2b7cd4, wireframe: true });
-    const pointerMat2 = new THREE.MeshBasicMaterial({ color: 0xdf7b6c, wireframe: true });
+    const pointerGeo = new THREE.SphereGeometry(0.03, 12, 12);
+    const pointerMat1 = new THREE.MeshBasicMaterial({ color: 0x00f0ff, wireframe: true });
+    const pointerMat2 = new THREE.MeshBasicMaterial({ color: 0xff007f, wireframe: true });
     controller1.add(new THREE.Mesh(pointerGeo, pointerMat1));
     controller2.add(new THREE.Mesh(pointerGeo, pointerMat2));
 
@@ -361,7 +475,19 @@
     if (hand1) scene.add(hand1);
     if (hand2) scene.add(hand2);
 
-    // 4. Fallback 2D Drag-To-Look Controls
+    // 4. VR Session State & Controller Buttons
+    const spaceFolds = ['Standard 3D', 'Inception Overhang', 'Möbius Twist', 'Wormhole Lens'];
+    const engineNames = ['Sacred Chamber', 'Retrowave Synthgrid', 'Gyroid Cymatics', 'Agate Geode'];
+
+    let currentFoldIdx = 1; // Inception Overhang
+    let currentEngineIdx = 0; // Sacred Chamber
+    let travelDist = 0.0;
+    let warpVelocity = 1.2;
+
+    let btnAPressedPrev = false;
+    let btnBPressedPrev = false;
+
+    // 5. Desktop 2D Look Controls (Fallback before entering VR)
     let isDragging = false;
     let prevX = 0, prevY = 0;
     let lon = 0, lat = 0;
@@ -395,11 +521,10 @@
 
     window.addEventListener('pointerup', () => { isDragging = false; });
 
-    // 5. Native Quest WebXR Launcher
+    // 6. WebXR Entry
     if ('xr' in navigator) {
       navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
         if (supported) {
-          hwVal.textContent = 'Quest VR Available';
           vrBtn.addEventListener('click', async () => {
             if (renderer.xr.isPresenting) {
               renderer.xr.getSession().end();
@@ -410,7 +535,6 @@
                 });
                 await renderer.xr.setSession(session);
                 vrBtn.textContent = 'EXIT VR';
-                statusVal.textContent = 'Active in VR';
               } catch (err) {
                 document.getElementById('err-banner').style.display = 'block';
                 document.getElementById('err-banner').textContent = 'VR Launch Error: ' + err.message;
@@ -418,18 +542,12 @@
             }
           });
         } else {
-          hwVal.textContent = 'VR Not Supported on Browser';
           vrBtn.style.display = 'none';
         }
-      }).catch(err => {
-        hwVal.textContent = 'XR Check Error';
       });
-    } else {
-      hwVal.textContent = 'WebXR Not Available (Use HTTPS)';
-      vrBtn.style.display = 'none';
     }
 
-    // 6. Animation Loop (Smooth Reversal Kinematics)
+    // 7. Kinematics & WebXR Input Loop
     let lastTime = performance.now();
     let pingPongPhase = Math.asin(Math.min(Math.max(74.0 / 180.0, -1.0), 1.0));
     let curPinch = 0.0;
@@ -441,10 +559,9 @@
       lastTime = now;
       if (dt > 0.1) dt = 0.1;
 
-      // Follow camera origin
       skyDome.position.copy(camera.position);
 
-      // Smooth Reversal Kinematics
+      // Smooth Reversal Kinematics (74° harmonic oscillation)
       const baseAngularSpeed = 32.0;
       const rotSpeedMult = 0.12;
       const omega = (baseAngularSpeed * rotSpeedMult * Math.PI) / 180.0;
@@ -453,15 +570,55 @@
       uniforms.u_flow_angle.value = (currentAngleDeg * Math.PI) / 180.0;
       uniforms.u_time.value = timestamp * 0.001;
 
-      // Process Quest Hand / Controller Inputs in VR
+      // Accumulate forward warp tunnel travel
+      travelDist += warpVelocity * dt;
+      uniforms.u_travel_dist.value = travelDist;
+
+      // WebXR Hand & Controller Input Processing
       if (renderer.xr.isPresenting) {
         let leftPos = null;
         let rightPos = null;
         let activePinch = 0.0;
 
-        // Optical hands check
+        const session = renderer.xr.getSession();
+        if (session && session.inputSources) {
+          for (const s of session.inputSources) {
+            // Read Thumbsticks to accelerate/decelerate tunnel warp speed
+            if (s.gamepad && s.gamepad.axes) {
+              const stickY = s.gamepad.axes[3] || s.gamepad.axes[1] || 0.0;
+              if (Math.abs(stickY) > 0.15) {
+                warpVelocity = THREE.MathUtils.clamp(warpVelocity - stickY * dt * 2.5, -4.0, 6.0);
+                speedVal.textContent = warpVelocity.toFixed(2) + 'x';
+              }
+            }
+
+            // Read Buttons: A / X to Cycle Space-Folds; B / Y to Cycle Archetypes
+            if (s.gamepad && s.gamepad.buttons) {
+              const btnA = s.gamepad.buttons[4] && s.gamepad.buttons[4].pressed; // A or X
+              const btnB = s.gamepad.buttons[5] && s.gamepad.buttons[5].pressed; // B or Y
+              const trigger = s.gamepad.buttons[0] ? s.gamepad.buttons[0].value : 0.0;
+
+              if (btnA && !btnAPressedPrev) {
+                currentFoldIdx = (currentFoldIdx + 1) % spaceFolds.length;
+                uniforms.u_space_fold.value = currentFoldIdx;
+                foldVal.textContent = spaceFolds[currentFoldIdx];
+              }
+              btnAPressedPrev = btnA;
+
+              if (btnB && !btnBPressedPrev) {
+                currentEngineIdx = (currentEngineIdx + 1) % engineNames.length;
+                uniforms.u_engine_type.value = currentEngineIdx;
+                engineVal.textContent = engineNames[currentEngineIdx];
+              }
+              btnBPressedPrev = btnB;
+
+              activePinch = Math.max(activePinch, trigger);
+            }
+          }
+        }
+
+        // Optical Hand Tracking Check
         if (hand1 && hand1.joints && hand1.joints['wrist'] && hand2 && hand2.joints && hand2.joints['wrist']) {
-          statusVal.textContent = 'Optical Hands Active';
           leftPos = hand1.joints['wrist'].position;
           rightPos = hand2.joints['wrist'].position;
 
@@ -472,19 +629,8 @@
             activePinch = THREE.MathUtils.clamp(1.0 - (dist - 0.015) / 0.035, 0.0, 1.0);
           }
         } else if (controller1 && controller2) {
-          // Touch Controllers
-          statusVal.textContent = 'Touch Controllers Active';
           leftPos = controller1.position;
           rightPos = controller2.position;
-
-          const session = renderer.xr.getSession();
-          if (session && session.inputSources) {
-            for (const s of session.inputSources) {
-              if (s.gamepad && s.gamepad.buttons[0]) {
-                activePinch = Math.max(activePinch, s.gamepad.buttons[0].value);
-              }
-            }
-          }
         }
 
         if (leftPos && rightPos) {
@@ -495,7 +641,7 @@
           uniforms.u_hand_impulse.value.set(midX, midY);
         }
 
-        curPinch += (activePinch - curPinch) * 0.15;
+        curPinch += (activePinch - curPinch) * 0.18;
         uniforms.u_pinch_force.value = curPinch;
         uniforms.u_hand_span.value = curSpan;
 
