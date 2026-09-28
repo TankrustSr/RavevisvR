@@ -104,8 +104,8 @@
     <div class="hud-controls">
       • <b>Left Hand Hold Pinch (1.2s):</b> Charges glowing ring to toggle menu.<br>
       • <b>Right Hand:</b> Palm-stabilized laser; light pinch to select.<br>
-      • <b>Right Open Pinch:</b> High-intensity shockwave in open space.<br>
-      • <b>Presets:</b> Toggle between Sacred Chamber (6-Petal) and Silk Tunnel (3-Petal).
+      • <b>Warp Throttle:</b> Set to 0.0x (Fixed orientation, no motion sickness).<br>
+      • <b>Presets:</b> Independent Geometry & Color Palette selection.
     </div>
   </div>
 
@@ -411,66 +411,96 @@
     }
 
     // =========================================================================
-    // MASTER PRESET DICTIONARY
+    // COLOR PALETTES
     // =========================================================================
-    const masterPresets = {
+    const colorPalettes = {
+      amberSlate: {
+        name: 'Amber & Slate',
+        shadow: '#1c1412', coolA: '#7e5234', coolB: '#df7b6c',
+        warmB: '#4e999b', warmA: '#2b7cd4', crest: '#ffffff'
+      },
+      opalSilk: {
+        name: 'Opal Salmon/Teal',
+        shadow: '#1e1614', coolA: '#9f6548', coolB: '#e4796f',
+        warmB: '#377dd7', warmA: '#50afaf', crest: '#ffffff'
+      },
+      emeraldGold: {
+        name: 'Emerald & Brass',
+        shadow: '#050d0a', coolA: '#0f3d32', coolB: '#3da688',
+        warmB: '#b37517', warmA: '#e6b543', crest: '#fbf5db'
+      },
+      velvetOrchid: {
+        name: 'Velvet Orchid',
+        shadow: '#0c0514', coolA: '#39154a', coolB: '#8739a8',
+        warmB: '#c7385a', warmA: '#f28e2b', crest: '#ffe8f6'
+      },
+      crimsonDusk: {
+        name: 'Crimson Dusk',
+        shadow: '#0d0305', coolA: '#3b1118', coolB: '#6b2230',
+        warmB: '#ab1326', warmA: '#f75c40', crest: '#ffede6'
+      },
+      deepAbyss: {
+        name: 'Abyssal Glow',
+        shadow: '#02060d', coolA: '#08203e', coolB: '#197278',
+        warmB: '#044343', warmA: '#28e8a6', crest: '#d6fff6'
+      }
+    };
+
+    let activeColorPaletteKey = 'amberSlate';
+
+    // =========================================================================
+    // GEOMETRY & KINEMATICS MASTER PRESETS (WARP THROTTLE = 0.0)
+    // =========================================================================
+    const geometryPresets = {
       preset_sacred_chamber: {
         name: 'Sacred Chamber (6-Petal)',
-        desc: '6-Petal Hex Bilateral • 74° Flow • Amber & Slate',
+        desc: '6-Petal Hex Bilateral • 74° Flow • 0.35 Stretch • 1.10 Contrast',
         segs: 6.0,
-        kaleidoAngle: 30.0 * Math.PI / 180.0,
         flowAngle: 74.0 * Math.PI / 180.0,
         stretch: 0.35,
         contrast: 1.10,
-        speed: 1.00,
-        warp: 0.90,
         density: 22.0,
         ridge: 0.38,
         chroma: 0.46,
         shimmer: 0.85,
         rim: 0.40,
         grain: 0.02,
-        shadow: '#1c1412', coolA: '#7e5234', coolB: '#df7b6c',
-        warmB: '#4e999b', warmA: '#2b7cd4', crest: '#ffffff'
+        defaultPalette: 'amberSlate'
       },
       preset_silk_tunnel: {
         name: 'Silk Tunnel (3-Petal)',
-        desc: '3-Petal Vanishing Tunnel • -177° Flow • Opal Salmon/Teal',
+        desc: '3-Petal Vanishing Tunnel • -177° Flow • 0.28 Stretch • 0.50 Contrast',
         segs: 3.0,
-        kaleidoAngle: 30.0 * Math.PI / 180.0,
         flowAngle: -177.0 * Math.PI / 180.0,
         stretch: 0.28,
         contrast: 0.50,
-        speed: 0.90,
-        warp: 0.90,
         density: 22.0,
         ridge: 0.38,
         chroma: 0.46,
         shimmer: 0.85,
         rim: 0.40,
         grain: 0.03,
-        shadow: '#1e1614', coolA: '#9f6548', coolB: '#e4796f',
-        warmB: '#377dd7', warmA: '#50afaf', crest: '#ffffff'
+        defaultPalette: 'opalSilk'
       }
     };
 
-    let activeMasterPresetId = 'preset_sacred_chamber';
+    let activeGeoPresetKey = 'preset_sacred_chamber';
 
     const uniforms = {
       u_time:              { value: 0.0 },
-      u_flow_angle:        { value: masterPresets.preset_sacred_chamber.flowAngle },
-      u_speed:             { value: masterPresets.preset_sacred_chamber.speed },
-      u_warp_scale:        { value: masterPresets.preset_sacred_chamber.warp },
-      u_flow_stretch:      { value: masterPresets.preset_sacred_chamber.stretch },
-      u_kaleido_segs:      { value: masterPresets.preset_sacred_chamber.segs },
-      u_kaleido_angle:     { value: masterPresets.preset_sacred_chamber.kaleidoAngle },
-      u_contour_freq:      { value: masterPresets.preset_sacred_chamber.density },
-      u_ridge_weight:      { value: masterPresets.preset_sacred_chamber.ridge },
-      u_chroma_aberration: { value: masterPresets.preset_sacred_chamber.chroma },
-      u_specular_shimmer:  { value: masterPresets.preset_sacred_chamber.shimmer },
-      u_rim_glow:          { value: masterPresets.preset_sacred_chamber.rim },
-      u_contrast:          { value: masterPresets.preset_sacred_chamber.contrast },
-      u_grain_level:       { value: masterPresets.preset_sacred_chamber.grain },
+      u_flow_angle:        { value: geometryPresets.preset_sacred_chamber.flowAngle },
+      u_speed:             { value: 0.45 },
+      u_warp_scale:        { value: 0.90 },
+      u_flow_stretch:      { value: geometryPresets.preset_sacred_chamber.stretch },
+      u_kaleido_segs:      { value: geometryPresets.preset_sacred_chamber.segs },
+      u_kaleido_angle:     { value: 30.0 * Math.PI / 180.0 },
+      u_contour_freq:      { value: geometryPresets.preset_sacred_chamber.density },
+      u_ridge_weight:      { value: geometryPresets.preset_sacred_chamber.ridge },
+      u_chroma_aberration: { value: geometryPresets.preset_sacred_chamber.chroma },
+      u_specular_shimmer:  { value: geometryPresets.preset_sacred_chamber.shimmer },
+      u_rim_glow:          { value: geometryPresets.preset_sacred_chamber.rim },
+      u_contrast:          { value: geometryPresets.preset_sacred_chamber.contrast },
+      u_grain_level:       { value: geometryPresets.preset_sacred_chamber.grain },
 
       u_left_trail:        { value: leftTrailArray },
       u_left_vels:         { value: leftVelsArray },
@@ -478,12 +508,12 @@
       u_right_vels:        { value: rightVelsArray },
       u_right_burst:       { value: 0.0 },
 
-      u_col_shadow:        { value: new THREE.Color(masterPresets.preset_sacred_chamber.shadow) },
-      u_col_cool_a:        { value: new THREE.Color(masterPresets.preset_sacred_chamber.coolA) },
-      u_col_cool_b:        { value: new THREE.Color(masterPresets.preset_sacred_chamber.coolB) },
-      u_col_warm_a:        { value: new THREE.Color(masterPresets.preset_sacred_chamber.warmA) },
-      u_col_warm_b:        { value: new THREE.Color(masterPresets.preset_sacred_chamber.warmB) },
-      u_col_crest:         { value: new THREE.Color(masterPresets.preset_sacred_chamber.crest) }
+      u_col_shadow:        { value: new THREE.Color(colorPalettes.amberSlate.shadow) },
+      u_col_cool_a:        { value: new THREE.Color(colorPalettes.amberSlate.coolA) },
+      u_col_cool_b:        { value: new THREE.Color(colorPalettes.amberSlate.coolB) },
+      u_col_warm_a:        { value: new THREE.Color(colorPalettes.amberSlate.warmA) },
+      u_col_warm_b:        { value: new THREE.Color(colorPalettes.amberSlate.warmB) },
+      u_col_crest:         { value: new THREE.Color(colorPalettes.amberSlate.crest) }
     };
 
     const domeMat = new THREE.ShaderMaterial({
@@ -498,7 +528,7 @@
     scene.add(skyDome);
 
     // =========================================================================
-    // 3. WORLD-LOCKED PALETTE STUDIO MENU
+    // 3. WORLD-LOCKED PALETTE STUDIO MENU (2-Tier UI: Geometry & Colors)
     // =========================================================================
     const menuCanvas = document.createElement('canvas');
     menuCanvas.width = 1024;
@@ -561,8 +591,8 @@
 
         // Frosted Glass Dark Backing
         const gradBg = ctx.createLinearGradient(0, 0, 0, 700);
-        gradBg.addColorStop(0, 'rgba(16, 20, 32, 0.94)');
-        gradBg.addColorStop(1, 'rgba(8, 10, 16, 0.96)');
+        gradBg.addColorStop(0, 'rgba(16, 20, 32, 0.95)');
+        gradBg.addColorStop(1, 'rgba(8, 10, 16, 0.97)');
         ctx.fillStyle = gradBg;
         drawRoundedRect(ctx, 16, 16, 992, 668, 28);
         ctx.fill();
@@ -572,39 +602,38 @@
         ctx.stroke();
 
         // Title & Instruction
-        ctx.font = '700 28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.font = '700 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
         ctx.fillStyle = '#ffffff';
-        ctx.fillText('✨ K1 CHROMATIC PALETTE STUDIO', 48, 68);
+        ctx.fillText('✨ K1 SPATIAL PALETTE & GEOMETRY STUDIO', 48, 62);
 
-        ctx.font = '500 16px -apple-system, sans-serif';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.fillText('Point right laser & pinch to select | Hold left pinch to dismiss', 48, 98);
+        ctx.font = '500 15px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.fillText('Right laser + pinch to select | Warp Throttle: 0.0x (Fixed Orientation)', 48, 88);
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.beginPath();
-        ctx.moveTo(48, 116);
-        ctx.lineTo(976, 116);
+        ctx.moveTo(48, 104);
+        ctx.lineTo(976, 104);
         ctx.stroke();
 
-        // Section Title: MASTER PRESETS
-        ctx.font = '700 16px -apple-system, sans-serif';
+        // SECTION 1: GEOMETRY PRESETS
+        ctx.font = '700 14px -apple-system, sans-serif';
         ctx.fillStyle = '#f7a844';
-        ctx.fillText('FEATURED MASTER PRESETS', 48, 150);
+        ctx.fillText('GEOMETRY ARCHETYPES', 48, 128);
 
-        // Two Big Master Preset Hero Cards
-        const pKeys = ['preset_sacred_chamber', 'preset_silk_tunnel'];
-        const heroY = 168;
-        const heroW = 446;
-        const heroH = 142;
+        const geoKeys = ['preset_sacred_chamber', 'preset_silk_tunnel'];
+        const geoY = 138;
+        const geoW = 446;
+        const geoH = 68;
 
-        pKeys.forEach((key, idx) => {
-          const p = masterPresets[key];
-          const bx = 48 + idx * (heroW + 36);
-          const isSelected = (activeMasterPresetId === key);
+        geoKeys.forEach((key, idx) => {
+          const g = geometryPresets[key];
+          const bx = 48 + idx * (geoW + 36);
+          const isSelected = (activeGeoPresetKey === key);
           const isHovered = (hoveredButtonId === key);
           const isPressed = (lockedButtonId === key);
 
-          clickableAreas.push({ id: key, x: bx, y: heroY, w: heroW, h: heroH, type: 'masterPreset' });
+          clickableAreas.push({ id: key, x: bx, y: geoY, w: geoW, h: geoH, type: 'geometry' });
 
           if (isPressed) {
             ctx.fillStyle = 'rgba(0, 240, 255, 0.40)';
@@ -615,48 +644,91 @@
           } else {
             ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
           }
-          drawRoundedRect(ctx, bx, heroY, heroW, heroH, 18);
+          drawRoundedRect(ctx, bx, geoY, geoW, geoH, 14);
           ctx.fill();
 
-          ctx.lineWidth = (isSelected || isPressed) ? 3.0 : (isHovered ? 2.0 : 1.5);
+          ctx.lineWidth = (isSelected || isPressed) ? 2.5 : (isHovered ? 2.0 : 1.5);
           ctx.strokeStyle = (isSelected || isPressed)
             ? '#00f0ff'
-            : (isHovered ? 'rgba(255, 255, 255, 0.6)' : 'rgba(255, 255, 255, 0.14)');
+            : (isHovered ? 'rgba(255, 255, 255, 0.55)' : 'rgba(255, 255, 255, 0.14)');
           ctx.stroke();
 
-          // Title & Status Tag
-          ctx.font = '700 20px -apple-system, sans-serif';
+          ctx.font = '700 17px -apple-system, sans-serif';
           ctx.fillStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.9)';
-          ctx.fillText(p.name, bx + 20, heroY + 38);
+          ctx.fillText(g.name, bx + 16, geoY + 28);
 
           if (isSelected) {
             ctx.fillStyle = '#00f0ff';
-            ctx.font = '700 12px -apple-system, sans-serif';
-            ctx.fillText('● ACTIVE', bx + heroW - 90, heroY + 36);
+            ctx.font = '700 11px -apple-system, sans-serif';
+            ctx.fillText('● ACTIVE', bx + geoW - 75, geoY + 26);
           }
 
-          // Description subtext
-          ctx.font = '500 13px -apple-system, sans-serif';
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-          ctx.fillText(p.desc, bx + 20, heroY + 68);
+          ctx.font = '500 12px -apple-system, sans-serif';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+          ctx.fillText(g.desc, bx + 16, geoY + 50);
+        });
 
-          // Six Swatch Bubbles
+        // SECTION 2: COLOR PALETTES (All options remain available)
+        ctx.font = '700 14px -apple-system, sans-serif';
+        ctx.fillStyle = '#79c0ff';
+        ctx.fillText('COLOR PALETTE SELECTION', 48, 234);
+
+        const palKeys = Object.keys(colorPalettes);
+        const cardW = 294;
+        const cardH = 68;
+        const startPalY = 246;
+
+        palKeys.forEach((key, idx) => {
+          const col = idx % 3;
+          const row = Math.floor(idx / 3);
+          const bx = 48 + col * (cardW + 23);
+          const by = startPalY + row * (cardH + 12);
+          const p = colorPalettes[key];
+          const isSelected = (activeColorPaletteKey === key);
+          const isHovered = (hoveredButtonId === key);
+          const isPressed = (lockedButtonId === key);
+
+          clickableAreas.push({ id: key, x: bx, y: by, w: cardW, h: cardH, type: 'palette' });
+
+          if (isPressed) {
+            ctx.fillStyle = 'rgba(0, 240, 255, 0.35)';
+          } else if (isSelected) {
+            ctx.fillStyle = 'rgba(40, 160, 240, 0.25)';
+          } else if (isHovered) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+          } else {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+          }
+          drawRoundedRect(ctx, bx, by, cardW, cardH, 12);
+          ctx.fill();
+
+          ctx.lineWidth = (isSelected || isPressed) ? 2.5 : (isHovered ? 2.0 : 1.2);
+          ctx.strokeStyle = (isSelected || isPressed)
+            ? '#00f0ff'
+            : (isHovered ? 'rgba(255, 255, 255, 0.45)' : 'rgba(255, 255, 255, 0.12)');
+          ctx.stroke();
+
+          ctx.font = (isSelected ? '700' : '600') + ' 15px -apple-system, sans-serif';
+          ctx.fillStyle = isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.85)';
+          ctx.fillText(p.name, bx + 14, by + 26);
+
+          // 6 Mini Swatches
           const swatches = [p.shadow, p.coolA, p.coolB, p.warmB, p.warmA, p.crest];
           swatches.forEach((cHex, cIdx) => {
             ctx.beginPath();
-            ctx.arc(bx + 30 + cIdx * 34, heroY + 104, 12, 0, Math.PI * 2);
+            ctx.arc(bx + 20 + cIdx * 24, by + 48, 8, 0, Math.PI * 2);
             ctx.fillStyle = cHex;
             ctx.fill();
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 1.2;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
             ctx.stroke();
           });
         });
 
-        // Section Title: ACTIVE CHROMATIC CHANNELS
-        ctx.font = '700 16px -apple-system, sans-serif';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.fillText('LIVE CHROMATIC SPECTRUM', 48, 356);
+        // SECTION 3: LIVE SPECTRUM READOUT
+        ctx.font = '700 13px -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.fillText('ACTIVE CHROMATIC CHANNELS', 48, 424);
 
         const activeChannels = [
           { label: 'SHADOW', val: uniforms.u_col_shadow.value.getHexString() },
@@ -667,48 +739,48 @@
           { label: 'CREST',  val: uniforms.u_col_crest.value.getHexString()  }
         ];
 
-        const cCardW = 142;
-        const cCardH = 80;
+        const chW = 142;
+        const chH = 70;
         activeChannels.forEach((ch, idx) => {
-          const cx = 48 + idx * (cCardW + 24);
-          const cy = 374;
+          const cx = 48 + idx * (chW + 15);
+          const cy = 438;
 
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
-          drawRoundedRect(ctx, cx, cy, cCardW, cCardH, 14);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+          drawRoundedRect(ctx, cx, cy, chW, chH, 10);
           ctx.fill();
 
           ctx.beginPath();
-          ctx.arc(cx + 28, cy + 40, 14, 0, Math.PI * 2);
+          ctx.arc(cx + 26, cy + 35, 12, 0, Math.PI * 2);
           ctx.fillStyle = '#' + ch.val;
           ctx.fill();
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = 'rgba(255,255,255,0.35)';
           ctx.stroke();
 
-          ctx.font = '700 12px -apple-system, sans-serif';
+          ctx.font = '700 11px -apple-system, sans-serif';
           ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-          ctx.fillText(ch.label, cx + 52, cy + 36);
+          ctx.fillText(ch.label, cx + 48, cy + 30);
 
-          ctx.font = '500 11px monospace';
+          ctx.font = '500 10.5px monospace';
           ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-          ctx.fillText('#' + ch.val.toUpperCase(), cx + 52, cy + 54);
+          ctx.fillText('#' + ch.val.toUpperCase(), cx + 48, cy + 48);
         });
 
         // Parameters readout strip
-        const cur = masterPresets[activeMasterPresetId];
+        const gCur = geometryPresets[activeGeoPresetKey];
         ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-        drawRoundedRect(ctx, 48, 480, 928, 54, 12);
+        drawRoundedRect(ctx, 48, 524, 928, 40, 10);
         ctx.fill();
 
-        ctx.font = '600 12px monospace';
+        ctx.font = '600 11.5px monospace';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-        ctx.fillText(`PETALS: ${cur.segs}x  |  CONTRAST: ${cur.contrast.toFixed(2)}  |  TUNNEL APERTURE: ${cur.stretch.toFixed(2)}  |  FLOW DIR: ${(cur.flowAngle * 180 / Math.PI).toFixed(0)}°  |  GRAIN: ${cur.grain.toFixed(2)}`, 68, 512);
+        ctx.fillText(`GEOMETRY: ${gCur.name}  |  PETALS: ${gCur.segs}x  |  CONTRAST: ${gCur.contrast.toFixed(2)}  |  FLOW DIR: ${(gCur.flowAngle * 180 / Math.PI).toFixed(0)}°  |  WARP THROTTLE: 0.00x (STATIC)`, 64, 548);
 
         // Close Button
         const closeBtnX = 384;
-        const closeBtnY = 574;
+        const closeBtnY = 584;
         const closeBtnW = 256;
-        const closeBtnH = 56;
+        const closeBtnH = 52;
         const isCloseHovered = (hoveredButtonId === 'closeBtn');
         const isClosePressed = (lockedButtonId === 'closeBtn');
 
@@ -717,7 +789,7 @@
         ctx.fillStyle = isClosePressed
           ? 'rgba(255, 60, 60, 0.65)'
           : (isCloseHovered ? 'rgba(255, 80, 80, 0.4)' : 'rgba(255, 255, 255, 0.12)');
-        drawRoundedRect(ctx, closeBtnX, closeBtnY, closeBtnW, closeBtnH, 28);
+        drawRoundedRect(ctx, closeBtnX, closeBtnY, closeBtnW, closeBtnH, 26);
         ctx.fill();
 
         ctx.lineWidth = 2;
@@ -727,7 +799,7 @@
         ctx.font = '700 16px -apple-system, sans-serif';
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
-        ctx.fillText('CLOSE STUDIO', closeBtnX + closeBtnW * 0.5, closeBtnY + 34);
+        ctx.fillText('CLOSE STUDIO', closeBtnX + closeBtnW * 0.5, closeBtnY + 32);
         ctx.textAlign = 'left';
 
         menuTexture.needsUpdate = true;
@@ -738,24 +810,34 @@
 
     renderMenuCanvas();
 
-    function applyMasterPreset(key) {
-      const p = masterPresets[key];
-      if (!p) return;
-      activeMasterPresetId = key;
+    function applyGeometryPreset(key) {
+      const g = geometryPresets[key];
+      if (!g) return;
+      activeGeoPresetKey = key;
 
-      uniforms.u_kaleido_segs.value = p.segs;
-      uniforms.u_kaleido_angle.value = p.kaleidoAngle;
-      uniforms.u_flow_angle.value = p.flowAngle;
-      uniforms.u_flow_stretch.value = p.stretch;
-      uniforms.u_contrast.value = p.contrast;
-      uniforms.u_speed.value = p.speed;
-      uniforms.u_warp_scale.value = p.warp;
-      uniforms.u_contour_freq.value = p.density;
-      uniforms.u_ridge_weight.value = p.ridge;
-      uniforms.u_chroma_aberration.value = p.chroma;
-      uniforms.u_specular_shimmer.value = p.shimmer;
-      uniforms.u_rim_glow.value = p.rim;
-      uniforms.u_grain_level.value = p.grain;
+      uniforms.u_kaleido_segs.value = g.segs;
+      uniforms.u_flow_angle.value = g.flowAngle;
+      uniforms.u_flow_stretch.value = g.stretch;
+      uniforms.u_contrast.value = g.contrast;
+      uniforms.u_contour_freq.value = g.density;
+      uniforms.u_ridge_weight.value = g.ridge;
+      uniforms.u_chroma_aberration.value = g.chroma;
+      uniforms.u_specular_shimmer.value = g.shimmer;
+      uniforms.u_rim_glow.value = g.rim;
+      uniforms.u_grain_level.value = g.grain;
+
+      // Apply default palette for this geometry
+      if (g.defaultPalette && colorPalettes[g.defaultPalette]) {
+        applyColorPalette(g.defaultPalette);
+      } else {
+        renderMenuCanvas();
+      }
+    }
+
+    function applyColorPalette(key) {
+      const p = colorPalettes[key];
+      if (!p) return;
+      activeColorPaletteKey = key;
 
       uniforms.u_col_shadow.value.set(p.shadow);
       uniforms.u_col_cool_a.value.set(p.coolA);
@@ -939,7 +1021,6 @@
       const focalDist = Math.pow(polarDist / Math.PI, 0.72) * Math.PI * 1.5;
 
       const tau = Math.PI * 2.0;
-      // Fixed: explicitly call Math.max rather than the undeclared global max()
       const segAngle = tau / Math.max(uniforms.u_kaleido_segs.value, 1.0);
       let modA = polarAngle % segAngle;
       if (modA < 0.0) modA += segAngle;
@@ -998,7 +1079,6 @@
 
     // 7. Kinematics & Render Loop
     let lastTime = performance.now();
-    let pingPongPhase = Math.asin(Math.min(Math.max(74.0 / 180.0, -1.0), 1.0));
 
     renderer.setAnimationLoop((timestamp) => {
       const now = performance.now();
@@ -1008,14 +1088,10 @@
 
       skyDome.position.copy(camera.position);
 
-      // Only perform automatic angular oscillation if in the default Sacred Chamber preset
-      if (activeMasterPresetId === 'preset_sacred_chamber') {
-        const baseAngularSpeed = 32.0;
-        const rotSpeedMult = 0.12;
-        const omega = (baseAngularSpeed * rotSpeedMult * Math.PI) / 180.0;
-        pingPongPhase += omega * dt;
-        const currentAngleDeg = 180.0 * Math.sin(pingPongPhase);
-        uniforms.u_flow_angle.value = (currentAngleDeg * Math.PI) / 180.0;
+      // WARP THROTTLE = 0.0 (Static, zero automated oscillation)
+      const currentG = geometryPresets[activeGeoPresetKey];
+      if (currentG) {
+        uniforms.u_flow_angle.value = currentG.flowAngle;
       }
       uniforms.u_time.value = timestamp * 0.001;
 
@@ -1201,10 +1277,11 @@
               }
             }
 
+            // 250ms sticky hover buffer ensures rock-solid click latching
             if (currentHitId) {
               hoveredButtonId = currentHitId;
               stickyHoverId = currentHitId;
-              stickyHoverTimer = 0.20;
+              stickyHoverTimer = 0.25;
             } else if (stickyHoverTimer > 0) {
               stickyHoverTimer -= dt;
               hoveredButtonId = stickyHoverId;
@@ -1212,24 +1289,27 @@
               hoveredButtonId = null;
             }
 
-            if (rightPinch > 0.30 && !lockedButtonId && hoveredButtonId) {
+            if (rightPinch > 0.28 && !lockedButtonId && hoveredButtonId) {
               lockedButtonId = hoveredButtonId;
             }
 
             renderMenuCanvas();
 
-            if (rightPinch > 0.58 && !rightPinchLatched) {
+            // Calibrated trigger: executes reliably at 0.55 pinch
+            if (rightPinch > 0.55 && !rightPinchLatched) {
               rightPinchLatched = true;
               const target = lockedButtonId || hoveredButtonId;
               if (target) {
                 if (rightGamepad && rightGamepad.hapticActuators && rightGamepad.hapticActuators[0]) {
-                  try { rightGamepad.hapticActuators[0].pulse(0.8, 60); } catch (e) {}
+                  try { rightGamepad.hapticActuators[0].pulse(0.85, 65); } catch (e) {}
                 }
 
                 if (target === 'closeBtn') {
                   toggleMenu();
                 } else if (target.startsWith('preset_')) {
-                  applyMasterPreset(target);
+                  applyGeometryPreset(target);
+                } else if (colorPalettes[target]) {
+                  applyColorPalette(target);
                 }
               }
             } else if (rightPinch < 0.20) {
